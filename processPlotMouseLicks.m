@@ -12,20 +12,9 @@ verbose = 1;
 saveFigs = 1;
 
 %% Specify animal/experiment/data location
-animalName = 'K69';
-expDateNum = '20140728_01';
-
-% Switch data source for home vs lab
-expDataSource = 2;
-switch expDataSource
-    case 1 % Local copy
-        dataDir = '/Users/stephenholtz/local_data/andermann/';
-    case 2 % Andermann Lab server (Atlas server mounted)
-        dataDir = '/Volumes/twophoton_data/epi_rig_behavior';
-    case 3 % Home file server copy
-        dataDir = '/Volumes/dataset1/andermann/';
-end
-clear expDataSource
+animalName  = 'K69';
+expDateNum  = '20140728_01';
+dataDir     = getExpDataSource('atlas');
 
 %% Load in experimental data
 expDir = fullfile(dataDir,animalName,expDateNum);
@@ -92,6 +81,4 @@ if saveFigs
     end
     export_fig(fullfile(figSaveDir,[figName '.pdf']))
 end
-
-
 
