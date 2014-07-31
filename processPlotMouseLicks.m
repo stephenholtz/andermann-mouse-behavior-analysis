@@ -12,7 +12,7 @@ verbose = 1;
 saveFigs = 1;
 
 %% Specify animal/experiment/data location
-animalName  = 'K69';
+animalName  = 'RS2';
 switch animalName
     case {'K69'}
         expDateNums  = {'20140724_02',...
@@ -33,10 +33,11 @@ end
 dataDir = getExpDataSource('local');
 
 for edn = expDateNums
-    close all;
     expDateNum = edn{1};
+    clear edn
+    close all force
 
-    %% Load in experimental data
+    % Load in experimental data
     expDir = fullfile(dataDir,animalName,expDateNum);
     if verbose; fprintf('expDir: %s\n',expDir); end
 
@@ -59,7 +60,6 @@ for edn = expDateNums
     relFreq     = @(mat)(sum(mat,1)/sum(sum(mat)));
 
     % set experimental and data parameters for importTrialLicks.m
-    pS.verbose     = 0;
     pS.secsBefore  = 2;
     pS.secsDuring  = 2;
     pS.secsAfter   = 3;
@@ -67,7 +67,7 @@ for edn = expDateNums
     % Get the lick rasters back
     [licks,stim] = importTrialLicks(exp,bhvData,pS);
 
-    %% Make lick frequency plots
+    % Make lick frequency plots
     makeLickFrequencyPlot = 1;
     if makeLickFrequencyPlot
         fprintf('makeLickFrequencyPlot\n')
@@ -89,7 +89,7 @@ for edn = expDateNums
         plot([pS.secsBefore+pS.secsDuring pS.secsBefore+pS.secsDuring],[ylim],'linewidth',2,'Color','k','linestyle','--')
         lH = legend('Pavlovian','Conditional Reward','Stim On/Off');
         lH.Location = 'NorthWest';
-        title({[num2str(binSize) 'ms binned licks'],'Pavlovian / Conditional Reward'});
+        title({[animalName ' ' expDateNum ' - ' num2str(binSize) 'ms binned licks'],'Pavlovian / Conditional Reward'},'interpreter','none');
         ylabel('Freq. Binned Licks')
         xlabel('Time (s)')
 
@@ -105,6 +105,10 @@ for edn = expDateNums
     makeLickRasterPlot = 1;
     if makeLickRasterPlot
         fprintf('makeLickRasterPlot\n')
+
+        % For adding lines to the images a silly way
+        myBwColormap = [1 1 1; 0 0 0; 0.1801 0.7177 0.6424];
+
         binSize = 25; % 1ms
         binFactor = (binSize/1000)*exp.daqRate;    
         
@@ -116,9 +120,14 @@ for edn = expDateNums
         blankLickRast   = binCount(licks.blank,binFactor)>0;
 
         % Extend the ticks down so they are easier to see
-        pavLickRast     = (pavLickRast | circshift(pavLickRast,-1));
-        condLickRewRast = (condLickRewRast | circshift(condLickRewRast,-1));
-        blankLickRast   = (blankLickRast | circshift(blankLickRast,-1));
+        pavLickRast     = (pavLickRast | circshift(pavLickRast,-1))+0;
+        condLickRewRast = (condLickRewRast | circshift(condLickRewRast,-1))+0;
+        blankLickRast   = (blankLickRast | circshift(blankLickRast,-1))+0;
+
+        % Draw lines on the images this way.... silly
+        pavLickRast(:,[pS.secsBefore*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) ]) = 2; 
+        condLickRewRast(:,[pS.secsBefore*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) ]) = 2; 
+        blankLickRast(:,[pS.secsBefore*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) ]) = 2; 
 
         figName = ['LickRaster-' animalName '-' expDateNum]; 
         fH = figure('Color',[1 1 1],'Position',[20 20 600 400]);
@@ -128,18 +137,12 @@ for edn = expDateNums
         set(gca,'Xticklabel','') 
         box off
         title({[animalName ' ' expDateNum],'Conditional Reward'},'interpreter','none')
-        hold
-        line([pS.secsBefore*(exp.daqRate/binFactor) pS.secsBefore*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
-        line([(pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
-
+        
         subplot(3,1,2)
         imagesc(condLickRewRast)
         set(gca,'Xticklabel','') 
         box off
         title('Pavlovian')
-        hold
-        line([pS.secsBefore*(exp.daqRate/binFactor) pS.secsBefore*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
-        line([(pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
 
         subplot(3,1,3)
         imagesc(blankLickRast)
@@ -150,12 +153,9 @@ for edn = expDateNums
         title('Blank')
         ylabel('Trial #')
         xlabel('Time (s)')
-        hold
-        line([pS.secsBefore*(exp.daqRate/binFactor) pS.secsBefore*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
-        line([(pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor) (pS.secsBefore+pS.secsDuring)*(exp.daqRate/binFactor)],[ylim],'color',[.2116 .1898 .5777],'linewidth',3)
 
-        colormap('bone')
-        colormap(flipud(colormap))
+        % Has 3 colors, blank, ticks, and division lines
+        colormap(myBwColormap)
 
         if saveFigs
             if ~exist(figSaveDir,'dir')
