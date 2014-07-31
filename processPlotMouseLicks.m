@@ -8,11 +8,17 @@
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
+forceClear = 0;
+if forceClear
+    close all force; 
+    clear all force;
+end
+
 verbose = 1;
 saveFigs = 1;
 
 %% Specify animal/experiment/data location
-animalName  = 'RS2';
+animalName  = 'K69';
 switch animalName
     case {'K69'}
         expDateNums  = {'20140724_02',...
@@ -37,7 +43,7 @@ for edn = expDateNums
     clear edn
     close all force
 
-    % Load in experimental data
+%% Load in experimental data
     expDir = fullfile(dataDir,animalName,expDateNum);
     if verbose; fprintf('expDir: %s\n',expDir); end
 
@@ -65,10 +71,10 @@ for edn = expDateNums
     pS.secsAfter   = 3;
 
     % Get the lick rasters back
-    [licks,stim] = importTrialLicks(exp,bhvData,pS);
+    [licks,stim,breaks] = importTrialLicks(exp,bhvData,pS);
 
-    % Make lick frequency plots
-    makeLickFrequencyPlot = 1;
+%% Make lick frequency plots
+    makeLickFrequencyPlot = 0;
     if makeLickFrequencyPlot
         fprintf('makeLickFrequencyPlot\n')
         binSize = 250;
@@ -78,7 +84,7 @@ for edn = expDateNums
         timeVec = 0:(binFactor/exp.daqRate):((size(licks.pavlovian,2)/exp.daqRate)-(binFactor/exp.daqRate));
 
         figSaveDir = fullfile(dataDir,'summary-figures',animalName);
-        figName = ['Licks-' animalName '-' expDateNum]; 
+        figName = ['Licks-' num2str(binSize) 'ms-bins-' animalName '-' expDateNum]; 
 
         figure('Color',[1 1 1],'Position',[20 20 600 400]);
         plot(timeVec,pavLickFreq,'linewidth',2);
@@ -101,8 +107,41 @@ for edn = expDateNums
         end
     end
 
-    % Make lick raster plot
-    makeLickRasterPlot = 1;
+%% Make beam break plots
+    makeBreakFreqPlot = 1;
+    if makeBreakFreqPlot
+        fprintf('makeBreakFreqPlot\n')
+        binSize = 250;
+        binFactor = (binSize/1000)*exp.daqRate;
+        pavLickFreq = relFreq(binCount(breaks.pavlovian,binFactor));
+        cRLickFreq = relFreq(binCount(breaks.condReward,binFactor));
+        timeVec = 0:(binFactor/exp.daqRate):((size(breaks.pavlovian,2)/exp.daqRate)-(binFactor/exp.daqRate));
+
+        figSaveDir = fullfile(dataDir,'summary-figures',animalName);
+        figName = ['BeamBreakFreq-' num2str(binSize) 'ms-bins-' animalName '-' expDateNum]; 
+
+        figure('Color',[1 1 1],'Position',[20 20 600 400]);
+        plot(timeVec,pavLickFreq,'linewidth',2);
+        hold
+        box off
+        plot(timeVec,cRLickFreq,'linewidth',2);
+        plot([pS.secsBefore pS.secsBefore],[ylim],'linewidth',2,'Color','k','linestyle','--')
+        plot([pS.secsBefore+pS.secsDuring pS.secsBefore+pS.secsDuring],[ylim],'linewidth',2,'Color','k','linestyle','--')
+        lH = legend('Pavlovian','Conditional Reward','Stim On/Off');
+        lH.Location = 'NorthWest';
+        title({[animalName ' ' expDateNum ' - ' num2str(binSize) 'ms binned beam breaks'],'Pavlovian / Conditional Reward'},'interpreter','none');
+        ylabel('Freq. Binned Beam Breaks')
+        xlabel('Time (s)')
+
+        if saveFigs
+            if ~exist(figSaveDir,'dir')
+                mkdir(figSaveDir)
+            end
+            export_fig(fullfile(figSaveDir,[figName '.pdf']))
+        end
+    end
+%% Make lick raster plot
+    makeLickRasterPlot = 0;
     if makeLickRasterPlot
         fprintf('makeLickRasterPlot\n')
 

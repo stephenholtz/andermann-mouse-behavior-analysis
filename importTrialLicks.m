@@ -1,8 +1,12 @@
-function [licks,stim] = importTrialLicks(exp,bhvData,parameterStruct)
+function [licks,stim,breaks] = importTrialLicks(exp,bhvData,parameterStruct)
 % importTrialLicks.m
 %
-% licks has fields for plotting lick behavior wrt stimulus type 
-% some light processing on the raw data
+% Does light processing on raw data, returns logical of lick onsets (licks)
+% stimulus (stim) and beam breaks (breaks). This function has gotten a bit out
+% of hand. Perhaps restructure it later.
+%
+% TODO: remove fieldnames (look how many!) and return large matricies or 
+% cell arrays instead
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
@@ -45,9 +49,9 @@ clear parameterStruct
 analogThresh = 4;
 
 if verbose; fprintf('\tProcessing analog channels\n'); end
-logLicks    = exp.Data(daqChan.lick,:) > analogThresh;
+logBreaks    = exp.Data(daqChan.lick,:) > analogThresh;
 % Throw away all but the lick onsets
-logLicks = [0 (diff(logLicks) > 0)];
+logLickOnsets = [0 (diff(logBreaks) > 0)];
 
 %logRewards  = exp.Data(daqChan.reward,:) > analogThresh;
 %logPunish   = exp.Data(daqChan.punish,:) > analogThresh;
@@ -109,55 +113,83 @@ numTrials = sum(trialOnsetLog);
 
 % 1 = pavlovian / 2 = conditional reward / 3 = blank 
 % 4 = condition punish / 5 = neutral  / +5 for ChR2
-lickPavlovian       = [];
-lickCondReward      = [];
-lickBlank           = [];
-lickCondPunish      = [];
-lickNeutral         = [];
-lickLedPavlovian    = [];
-lickLedCondReward   = [];
-lickLedBlank        = [];
-lickLedCondPunish   = [];
-lickLedNeutral      = [];
-stimOn              = [];
+stimOn                  = [];
+logLickPavlovian        = [];    breaksPavlovian         = [];
+logLickCondReward       = [];    breaksCondReward        = [];
+logLickBlank            = [];    breaksBlank             = [];
+logLickCondPunish       = [];    breaksCondPunish        = [];
+logLickNeutral          = [];    breaksNeutral           = [];
+logLickLedPavlovian     = [];    breaksLedPavlovian      = [];
+logLickLedCondReward    = [];    breaksLedCondReward     = [];
+logLickLedBlank         = [];    breaksLedBlank          = [];
+logLickLedCondPunish    = [];    breaksLedCondPunish     = [];
+logLickLedNeutral       = [];    breaksLedNeutral        = [];
+logAllLicks             = [];    breaksAll               = [];
+
 for iTrial = 1:numTrials
     currCond = bhvData.ConditionNumber(iTrial); 
     currWind = (strobeInds(stimOnsetInds(iTrial))-(secsBefore*exp.daqRate)):(((secsDuring+secsAfter)*exp.daqRate)+strobeInds(stimOnsetInds(iTrial))-1);
     currWind(currWind < 1) = 1;
     switch currCond
         case 1 % Pavlovian
-            lickPavlovian = [lickPavlovian; logLicks(currWind)];
+            logLickPavlovian = [logLickPavlovian; logLickOnsets(currWind)];
+            breaksPavlovian = [breaksPavlovian; logBreaks(currWind)];
         case 2 % Cond reward
-            lickCondReward = [lickCondReward; logLicks(currWind)];
+            logLickCondReward = [logLickCondReward; logLickOnsets(currWind)];
+            breaksCondReward = [breaksCondReward; logBreaks(currWind)];
          case 3 % Blank
-            lickBlank = [lickBlank; logLicks(currWind)];
+            logLickBlank = [logLickBlank; logLickOnsets(currWind)];
+            breaksBlank = [breaksBlank; logBreaks(currWind)];
         case 4 % Cond Punish
-            lickCondPunish = [lickCondPunish; logLicks(currWind)];
+            logLickCondPunish = [logLickCondPunish; logLickOnsets(currWind)];
+            breaksCondPunish = [breaksCondPunish; logBreaks(currWind)];
         case 5 % Neutral
-            lickNeutral = [lickNeutral; logLicks(currWind)];
+            logLickNeutral = [logLickNeutral; logLickOnsets(currWind)];
+            breaksNeutral = [breaksNeutral; logBreaks(currWind)];
         case 6 % LED + Pavlovian
-            lickLedPavlovian = [lickLedPavlovian; logLicks(currWind)];
+            logLickLedPavlovian = [logLickLedPavlovian; logLickOnsets(currWind)];
+            breaksLedPavlovian = [breaksLedPavlovian; logBreaks(currWind)];
         case 7 % LED + Cond reward
-            lickLedCondReward = [lickLedCondReward; logLicks(currWind)];
+            logLickLedCondReward = [logLickLedCondReward; logLickOnsets(currWind)];
+            breaksLedCondReward = [breaksLedCondReward; logBreaks(currWind)];
         case 8 % LED + Blank
-            lickLedBlank = [lickLedBlank; logLicks(currWind)];
+            logLickLedBlank = [logLickLedBlank; logLickOnsets(currWind)];
+            breaksLedBlank = [breaksLedBlank; logBreaks(currWind)];
         case 9 % LED + Cond punish
-            lickLedCondPunish = [lickLedCondPunish; logLicks(currWind)];
+            logLickLedCondPunish = [logLickLedCondPunish; logLickOnsets(currWind)];
+            breaksLedCondPunish = [breaksLedCondPunish; logBreaks(currWind)];
         case 10 % LED + Neutral
-            lickLedNeutral = [lickLedNeutral; logLicks(currWind)];
+            logLickLedNeutral = [logLickLedNeutral; logLickOnsets(currWind)];
+            breaksLedNeutral = [breaksLedNeutral; logBreaks(currWind)];
      end
-     stimOn = [stimOn; strobeLog(currWind)]; 
+     logAllLicks    = [logAllLicks; logLickOnsets(currWind)];
+     breaksAll      = [breaksAll; logBreaks(currWind)];
+     stimOn         = [stimOn; strobeLog(currWind)]; 
 end
 clear currCond iTrial currCond currWind nextRow
 
-licks.pavlovian     = lickPavlovian;
-licks.condReward    = lickCondReward;
-licks.blank         = lickBlank;
-licks.condPunish    = lickCondPunish;
-licks.neutral       = lickNeutral;
-licks.ledPavlovian  = lickLedPavlovian;
-licks.ledCondReward = lickLedCondReward;
-licks.ledBlank      = lickLedBlank;
-licks.ledCondPunish = lickLedCondPunish;
-licks.ledNeutral    = lickLedNeutral;
 stim.on             = stimOn;
+
+licks.pavlovian     = logLickPavlovian;
+licks.condReward    = logLickCondReward;
+licks.blank         = logLickBlank;
+licks.condPunish    = logLickCondPunish;
+licks.neutral       = logLickNeutral;
+licks.ledPavlovian  = logLickLedPavlovian;
+licks.ledCondReward = logLickLedCondReward;
+licks.ledBlank      = logLickLedBlank;
+licks.ledCondPunish = logLickLedCondPunish;
+licks.ledNeutral    = logLickLedNeutral;
+licks.all           = logAllLicks;
+
+breaks.pavlovian     = breaksPavlovian;
+breaks.condReward    = breaksCondReward;
+breaks.blank         = breaksBlank;
+breaks.condPunish    = breaksCondPunish;
+breaks.neutral       = breaksNeutral;
+breaks.ledPavlovian  = breaksLedPavlovian;
+breaks.ledCondReward = breaksLedCondReward;
+breaks.ledBlank      = breaksLedBlank;
+breaks.ledCondPunish = breaksLedCondPunish;
+breaks.ledNeutral    = breaksLedNeutral;
+breaks.all           = breaksAll;
