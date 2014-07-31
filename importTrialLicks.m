@@ -1,7 +1,8 @@
-function [licks] = importTrialLicks(exp,bhvData,parameterStruct)
+function [licks,stim] = importTrialLicks(exp,bhvData,parameterStruct)
 % importTrialLicks.m
 %
 % licks has fields for plotting lick behavior wrt stimulus type 
+% some light processing on the raw data
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
@@ -20,7 +21,7 @@ end
 if isfield(parameterStruct,'verbose')
     verbose = parameterStruct.verbose;
 else
-    verbose = 1;
+    verbose = 0;
 end
 if isfield(parameterStruct,'secsBefore')
     secsBefore = parameterStruct.secsBefore;
@@ -40,13 +41,14 @@ end
 clear parameterStruct
 
 %% Begin processing
-if verbose; fprintf('\nImporting behavior trials\n=======================================================\n'); end
-
 % Threshold analog channels (struct from nidaq acquisition = exp)
 analogThresh = 4;
 
-if verbose; fprintf('\tThresholding analog channels\n'); end
+if verbose; fprintf('\tProcessing analog channels\n'); end
 logLicks    = exp.Data(daqChan.lick,:) > analogThresh;
+% Throw away all but the lick onsets
+logLicks = [0 (diff(logLicks) > 0)];
+
 %logRewards  = exp.Data(daqChan.reward,:) > analogThresh;
 %logPunish   = exp.Data(daqChan.punish,:) > analogThresh;
 clear analogThresh
@@ -88,15 +90,15 @@ codesMat = flipud(codesMat');
 codeVals = bin2dec(num2str(codesMat));
 
 % Stimulus onsets
-stimOnsetLog = (codeVals == 6) | (codeVals == 12);
-stimOnsetLog = diff([stimOnsetLog(1); stimOnsetLog]) == 1;
-stimOnsetInds = find(stimOnsetLog);
+stimOnsetLog    = (codeVals == 6) | (codeVals == 12);
+stimOnsetLog    = diff([stimOnsetLog(1); stimOnsetLog]) == 1;
+stimOnsetInds   = find(stimOnsetLog);
 % Trial onsets (unneeded)
-trialOnsetLog = (codeVals == 18);
-trialOnsetLog = diff([trialOnsetLog(1); trialOnsetLog]) == -1;
+trialOnsetLog   = (codeVals == 18);
+trialOnsetLog   = diff([trialOnsetLog(1); trialOnsetLog]) == -1;
 % Trial offsets (unneeded)
-trialOffsetLog = (codeVals == 4);
-trialOffsetLog = diff([trialOffsetLog(1); trialOffsetLog]) == 1;
+trialOffsetLog  = (codeVals == 4);
+trialOffsetLog  = diff([trialOffsetLog(1); trialOffsetLog]) == 1;
 
 if numel(bhvData.TrialNumber) ~= sum(trialOnsetLog)
    warning('Trial number in monkeylogic bhv file does not agree with number of detected trial onsets') 
@@ -107,17 +109,17 @@ numTrials = sum(trialOnsetLog);
 
 % 1 = pavlovian / 2 = conditional reward / 3 = blank 
 % 4 = condition punish / 5 = neutral  / +5 for ChR2
-lickPavlovian   = [];
-lickCondReward  = [];
-lickBlank       = [];
-lickCondPunish  = [];
-lickNeutral     = [];
-lickLedPavlovian = [];
-lickLedCondReward = [];
-lickLedBlank    = [];
-lickLedCondPunish = [];
-lickLedNeutral  = [];
-
+lickPavlovian       = [];
+lickCondReward      = [];
+lickBlank           = [];
+lickCondPunish      = [];
+lickNeutral         = [];
+lickLedPavlovian    = [];
+lickLedCondReward   = [];
+lickLedBlank        = [];
+lickLedCondPunish   = [];
+lickLedNeutral      = [];
+stimOn              = [];
 for iTrial = 1:numTrials
     currCond = bhvData.ConditionNumber(iTrial); 
     currWind = (strobeInds(stimOnsetInds(iTrial))-(secsBefore*exp.daqRate)):(((secsDuring+secsAfter)*exp.daqRate)+strobeInds(stimOnsetInds(iTrial))-1);
@@ -144,6 +146,7 @@ for iTrial = 1:numTrials
         case 10 % LED + Neutral
             lickLedNeutral = [lickLedNeutral; logLicks(currWind)];
      end
+     stimOn = [stimOn; strobeLog(currWind)]; 
 end
 clear currCond iTrial currCond currWind nextRow
 
@@ -157,4 +160,4 @@ licks.ledCondReward = lickLedCondReward;
 licks.ledBlank      = lickLedBlank;
 licks.ledCondPunish = lickLedCondPunish;
 licks.ledNeutral    = lickLedNeutral;
-
+stim.on             = stimOn;
