@@ -6,8 +6,8 @@ function dataDir = getExpDataSource(location)
 %#ok<*NBRAK,*UNRCH>
 
 switch location 
-    case {1,'local'} % Local copy
-        dataDir = '/Users/stephenholtz/local_data/andermann/';
+    case {1,'local'} % Local copy (in amazon zocalo now)
+        dataDir = '/Users/stephenholtz/zocalo/andermann_data/';
     case {2,'atlas'} % Andermann Lab server (Atlas server mounted)
         dataDir = '/Volumes/twophoton_data/epi_rig_behavior';
     case {3,'freenas'} % Home file server copy
