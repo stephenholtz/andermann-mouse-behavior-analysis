@@ -1,7 +1,10 @@
 andermann-mouse-behavior-analysis
 =================================
 
-Simple behavior analysis and plots, not well organized, mostly utility scripts and hacking through data. 
-Currently for monkeylogic experiment data, psychtoolbox-based experiments, and video processing from either.
+For analyzing data from ChR2 experiments from my rotation in Mark Andermann's lab.
+
+Analysis for two experiment with hopefully mostly overlapping utility functions:
+psychtoolbox3, or monkeylogic-based experiments. The two were quite different in design.
+Will not elaborate further here (see my notes)
 
 This repository should be set to private, probably.

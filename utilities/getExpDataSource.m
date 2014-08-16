@@ -3,14 +3,15 @@ function dataDir = getExpDataSource(location)
 % can switch data source for home vs lab.
 %
 % SLH 2014
-%#ok<*NBRAK,*UNRCH>
-
+%#ok<*NBRAK,*UNRCH,*SAGROW>
 switch location 
-    case {1,'local'} % Local copy (in amazon zocalo now)
+    case {1,'macbook'} % Local macbook copy (in amazon zocalo now)
         dataDir = '/Users/stephenholtz/zocalo/andermann_data/';
-    case {2,'atlas'} % Andermann Lab server (Atlas server mounted)
-        dataDir = '/Volumes/twophoton_data/epi_rig_behavior';
-    case {3,'freenas'} % Home file server copy
+    case {2,'atlas-mac'} % Andermann Lab server (Atlas server mounted)
+        dataDir = '/Volumes/twophoton_data/epi_rig_behavior';        
+    case {3,'atlas-pc'} % Andermann Lab server run on server
+        dataDir = 'E:\twophoton_data\epi_rig_behavior';
+    case {4,'freenas'} % Home file server copy
         dataDir = '/Volumes/dataset1/andermann/';
     otherwise
         error('location input is not recognized')

@@ -19,12 +19,13 @@ saveFigs    = 1;
 textSize    = 14;
 overwriteSnoutStack = 1;
 
+
 %% Specify animal/experiment/data location
 animalName  = 'K71';
 expDateNum  = '20140808_01';
 
 % Retrieve folder location
-dataDir     = getExpDataSource('local');
+dataDir     = getExpDataSource('macbook');
 expDir      = fullfile(dataDir,animalName,expDateNum);
 saveDir     = fullfile(dataDir,'summary-figures',animalName);
 if ~exist(saveDir,'dir')
@@ -96,6 +97,7 @@ elseif exist(fullfile(saveDir,'snoutStack.avi'),'file')
 end
 
 %% Make vision objects
+
 % Required to be this object for the comp vision toolbox functions
 snoutObj = vision.VideoFileReader(fullfile(saveDir,'snoutStack.avi'));
 snoutObj.ImageColorSpace = 'Intensity';
