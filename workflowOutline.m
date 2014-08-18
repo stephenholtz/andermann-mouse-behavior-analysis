@@ -1,4 +1,6 @@
 %% Rough outline of workflow for ChR2 Experiment Data
+% Just for documentation, not really meant to be run
+%
 % (will probably quickly change)
 %
 % SLH 2014
