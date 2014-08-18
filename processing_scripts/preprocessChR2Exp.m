@@ -32,8 +32,8 @@ experimentName  = '20140815_01';
 
 % Process only some of files (testing time)
 processEyeFiles     = 1;
-processFaceFiles    = 0;
-processEpiFiles     = 0;
+processFaceFiles    = 1;
+processEpiFiles     = 1;
 processNidaqData    = 1;
 
 %% Establish base filepaths
@@ -73,13 +73,14 @@ if exist(eyeDir,'dir') && processEyeFiles
     eyeFileNames = {eyeDirFiles(eyeFileOrder).name};
 
     eyeAviFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.avi']);
-    %aviFileInfo = jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
+    aviFileInfo = jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
     eyeTiffFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.tiff']);
     [~,fN,ext] = fileparts(eyeAviFileName);
     [eyeTiffInfo, eyeMat] = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType);
+    % 41235 had issue "comma separated list has zero items"
 elseif ~processEyeFiles
     fprintf('Skipping eye file preprocessing\n')
 else
@@ -109,7 +110,7 @@ end
 epiDir = fullfile(rawDir,'epi');
 if exist(epiDir,'dir') && processEpiFiles
     fprintf('Starting epi file preprocessing\n')
-    % Should only be one file with epi data
+    % Should only be one avi file with epi data
     epiDirFiles = dir([epiDir filesep 'epi*.avi']);
     epiFileNames = {epiDirFiles(1).name};
 
@@ -123,10 +124,30 @@ else
     error('faceDir not found')
 end
 
-%% nidaq stuff ...
-%getStimTypeInds();
+%% process Nidaq data
 if processNidaqData
-        
+    fprintf('Starting nidaq processing\n')
+    nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
+    nidaqFilePath = fullfile(rawDir,nidaqFileName.name);
+
+    % loads in 'exp' struct
+    load(nidaqFilePath);
+
+    % Retrieve camera frame numbers from daq
+    daqCh.epiStrobe  = 8;
+    daqCh.faceStrobe = 9;
+    daqCh.eyeCount   = 17;
+
+    faceFrameNums = getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe');
+    eyeFrameNums = getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter');
+    epiFrameNums = getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe');
+
+    % Retrieve stimulus locations within timeseries 
+    daqCh.LED       = 1;
+    daqCh.ptb       = 2;
+
+    %getStimTypeIndsFromDaq(exp.Data(daqCh.LED));
+
 else
     fprintf('Skipping nidaq processing\n')
 end

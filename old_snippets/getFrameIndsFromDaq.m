@@ -38,13 +38,11 @@ if verbose; fprintf('\tLoading daq file: %s\n',nidaqFileName(1).name); end
 load(nidaqFilePath);
 
 % Load processed head tracking info
-if 0
 headTrackFileName = dir(fullfile(expDir,['headTrack.mat']));
 headTrackFilePath = fullfile(expDir,['headTrack.mat']);
 if verbose; fprintf('\tLoading head tracking file: %s\n',headTrackFileName(1).name); end
 % loads in stackRegOut
 load(headTrackFilePath); 
-end
 
 %% Determine frame timseries information
 % Preallocate nans
@@ -59,20 +57,14 @@ if ~exist('daqIndIds','var')
     daqIndId.eyeCount   = 17;
 end
 
-%  
 headStrobe = exp.Data(daqIndId.headStrobe,:);
 headStrobeOnsets = [0 diff(headStrobe) > 0];
 headFrameNums = cumsum(headStrobeOnsets);
-
 disp(headFrameNums(end))
 
 %epiStrobe = exp.Data(daqIndId.epiStrobe,:);
 %cumEpiStrobe = cumsum(epiStrobe);
 
-
-%plot(headStrobe);
-%hold all
-%plot(cumsum(headStrobe));
-
-
-% 
+plot(headStrobe);
+hold all
+plot(cumsum(headStrobe));
