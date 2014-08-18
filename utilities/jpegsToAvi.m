@@ -7,8 +7,9 @@ function [aviFileInfo] = jpegsToAvi(jpegFileCellArray,jpegFileDirectory,saveFile
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
 
-% Set up VideoWriter
-vObj = VideoWriter(saveFileName,'Grayscale AVI');
+% Set up VideoWriter. Older matlab versions do not support 'Grayscale AVI'?
+% vObj = VideoWriter(saveFileName,'Grayscale AVI');
+vObj = VideoWriter(saveFileName,'Uncompressed AVI');
 nFrames = numel(jpegFileCellArray);
 
 testing = 0;
