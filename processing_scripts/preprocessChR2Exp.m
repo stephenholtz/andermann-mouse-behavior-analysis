@@ -40,7 +40,7 @@ processNidaqData    = 0;
 %% Establish base filepaths
 
 % Get the base location for data, see function for details
-dataDir = getExpDataSource('macbook');
+dataDir = getExpDataSource('atlas-pc');
 % Experiment directory
 expDir  = fullfile(dataDir,animalName,experimentName);
 % Raw data filepath 
@@ -120,8 +120,9 @@ if exist(epiDir,'dir') && processEpiFiles
 
     % Convert avi to tiff and mat files
     compressionType = 'lzw';
+    loadType = 'serial';    
     epiTiffFileName = fullfile(procDir,['epi_' animalName '_' experimentName '.tiff']);
-    [epiTiffInfo, epiMat] = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType);
+    epiTiffInfo = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType,loadType);
 elseif ~processEpiFiles
     fprintf('Skipping epi files preprocessing\n')
 else

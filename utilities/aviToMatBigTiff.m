@@ -58,8 +58,7 @@ updateIncrement = ceil(log10(numel(framesToWrite)));
 switch loadType
     case {'allAtOnce',1}
         % Load all frames into memory and then write tiff stack
-        %rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
-        rawFrames(nImgRows,nImgCols,numel(framesToWrite)) = 0;
+        rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
         for iFrame = framesToWrite
             iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
             aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
@@ -69,24 +68,29 @@ switch loadType
                 fprintf([repmat('\b',1,19) '%8.d / %8.d'],iFrame,numel(framesToWrite));
             end
         end
-        if ~exist('writetiff','file')
+        if exist('writetiff','file')
+            startupMA            
             writetiff(rawFrames,saveFileName,'uint8');
         else
             imwrite(rawFrames,saveFileName)
         end
 
     case {'byMovie',2}
-        take3rdDim = @(x)(squeeze(x(:,:,1,:)));
+        % Works okay on the server, loads in each movie, takes the relevant
+        % dimension and then writes the concatenated stack as a tiff...
+        % depends on having a lot of free ram...
+        takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         parfor iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
-            rawFrames{iAvi} = take3rdDim(vObj(iAvi));
+            rawFrames{iAvi} = takeOne3rdDim(read(vObj(iAvi)));
             disp(['Finished iAvi : ' num2str(iAvi)])
         end
         frames = [];
         for iAvi = 1:numel(vObj)
-           frames = cat(3,rawFrames{iAvi}); 
+           frames = cat(3,frames,rawFrames{iAvi}); 
         end
-        if ~exist('writetiff','file')
+        if exist('writetiff','file')
+            startupMA
             writetiff(frames,saveFileName,'uint8');
         else
             imwrite(frames,saveFileName)
