@@ -100,8 +100,8 @@ if exist(faceDir,'dir') && processFaceFiles
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
-    % Load types: allAtOnce, or serial
-    loadType = 'byMovie';
+    % Load types: allAtOnce,byMovieParFor, or serial
+    loadType = 'byMovieParFor';
     faceTiffFileName = fullfile(procDir,['face_' animalName '_' experimentName '.tiff']);
     faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType,loadType);
 elseif ~processFaceFiles

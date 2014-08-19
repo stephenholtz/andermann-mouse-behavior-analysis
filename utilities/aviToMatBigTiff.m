@@ -52,12 +52,12 @@ switch lower(compression)
         error('Compression type not accounted for');
 end
 framesToWrite = 1:sum(nFrames);
-fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
 updateIncrement = ceil(log10(numel(framesToWrite)));
 
 switch loadType
     case {'allAtOnce',1}
         % Load all frames into memory and then write tiff stack
+        fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
         rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
         for iFrame = framesToWrite
             iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
@@ -75,15 +75,25 @@ switch loadType
             imwrite(rawFrames,saveFileName)
         end
 
-    case {'byMovie',2}
+    case {'byMovieParFor',2}
         % Works okay on the server, loads in each movie, takes the relevant
         % dimension and then writes the concatenated stack as a tiff...
         % depends on having a lot of free ram...
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
+        try
+            parpool(4)
+            useParpool = 1;
+        catch ME %#ok<*NASGU>
+            matlabpool('open',4);
+            useParpool = 1;
+        end
         parfor iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
             rawFrames{iAvi} = takeOne3rdDim(read(vObj(iAvi)));
             disp(['Finished iAvi : ' num2str(iAvi)])
+        end
+        if ~useParpool
+            matlabpool('close')
         end
         frames = [];
         for iAvi = 1:numel(vObj)
@@ -97,6 +107,7 @@ switch loadType
         end
 
     case {'serial',3}
+        fprintf('\nConverting AVI(s) to BigTiff Stack: %.8d / %8.d',1,numel(framesToWrite));
         % Write all the frames to a tiffstack
         t = Tiff(saveFileName,'w8');
         for iFrame = framesToWrite
