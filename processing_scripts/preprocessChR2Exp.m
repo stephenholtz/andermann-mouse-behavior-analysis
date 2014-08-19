@@ -34,7 +34,7 @@ experimentName  = '20140815_01';
 % Process only some of files (testing time)
 processEyeFiles     = 0;
 processFaceFiles    = 1;
-processEpiFiles     = 0;
+processEpiFiles     = 1;
 processNidaqData    = 0;
 
 %% Establish base filepaths
@@ -78,7 +78,7 @@ if exist(eyeDir,'dir') && processEyeFiles
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
-    loadType = 'allAtOnce';
+    loadType = 'serial';
     eyeTiffFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.tiff']);
     [~,fN,ext] = fileparts(eyeAviFileName);
     eyeTiffInfo = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType,loadType);
@@ -101,7 +101,7 @@ if exist(faceDir,'dir') && processFaceFiles
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
     % Load types: allAtOnce, or serial
-    loadType = 'allAtOnce';
+    loadType = 'byMovie';
     faceTiffFileName = fullfile(procDir,['face_' animalName '_' experimentName '.tiff']);
     faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType,loadType);
 elseif ~processFaceFiles

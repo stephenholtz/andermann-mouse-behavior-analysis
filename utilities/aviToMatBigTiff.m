@@ -51,7 +51,7 @@ switch lower(compression)
     otherwise
         error('Compression type not accounted for');
 end
-
+framesToWrite = 1:sum(nFrames);
 fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
 updateIncrement = ceil(log10(numel(framesToWrite)));
 
@@ -75,8 +75,23 @@ switch loadType
             imwrite(rawFrames,saveFileName)
         end
 
-    case {'paralell',2}
-        % Load all frames into memory in paralell and then write tiff stack
+    case {'byMovie',2}
+        take3rdDim = @(x)(squeeze(x(:,:,1,:)));
+        parfor iAvi = 1:numel(vObj)
+            disp(['Started iAvi : ' num2str(iAvi)])
+            rawFrames{iAvi} = take3rdDim(vObj(iAvi));
+            disp(['Finished iAvi : ' num2str(iAvi)])
+        end
+        frames = [];
+        for iAvi = 1:numel(vObj)
+           frames = cat(3,rawFrames{iAvi}); 
+        end
+        if ~exist('writetiff','file')
+            writetiff(frames,saveFileName,'uint8');
+        else
+            imwrite(frames,saveFileName)
+        end
+
     case {'serial',3}
         % Write all the frames to a tiffstack
         t = Tiff(saveFileName,'w8');
