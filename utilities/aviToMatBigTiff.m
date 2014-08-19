@@ -1,5 +1,7 @@
 function tiffInfo = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,saveFileName,compression,loadType)
-%  Very simple avi reading and tiff writing with bigtiff format
+%function tiffInfo = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,saveFileName,compression,loadType)
+%  Very simple avi reading and tiff writing that works on the server as
+%  a memory hog, or locally with bigtiff format
 %
 %  Takes an argument for compression type. Should use JPEG for the videos, 
 %  and LZW or none for epi data.
@@ -50,21 +52,14 @@ switch lower(compression)
         error('Compression type not accounted for');
 end
 
-testing = 0;
-if testing
-    framesToWrite = 1:2000:sum(nFrames);
-else
-    framesToWrite = 1:sum(nFrames);
-end
-
 fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
 updateIncrement = ceil(log10(numel(framesToWrite)));
 
 switch loadType
-    case {'serial',1}
-        %Use function from file exchange, a good deal faster but very
-        % inefficient
-        rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
+    case {'allAtOnce',1}
+        % Load all frames into memory and then write tiff stack
+        %rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
+        rawFrames(nImgRows,nImgCols,numel(framesToWrite)) = 0;
         for iFrame = framesToWrite
             iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
             aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
@@ -74,13 +69,20 @@ switch loadType
                 fprintf([repmat('\b',1,19) '%8.d / %8.d'],iFrame,numel(framesToWrite));
             end
         end
-        writetiff(rawFrames,saveFileName,'uint8');
-    case {'allAtOnce',2}
+        if ~exist('writetiff','file')
+            writetiff(rawFrames,saveFileName,'uint8');
+        else
+            imwrite(rawFrames,saveFileName)
+        end
+
+    case {'paralell',2}
+        % Load all frames into memory in paralell and then write tiff stack
+    case {'serial',3}
         % Write all the frames to a tiffstack
         t = Tiff(saveFileName,'w8');
         for iFrame = framesToWrite
             % Find the correct avi file to read (if needed)
-            iAvi = find(cumsum(nFrames) > iFrame, 1, 'first');
+            iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
             aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
             currRawFrame = read(vObj(iAvi),aviFrame);
 
@@ -107,9 +109,7 @@ switch loadType
     otherwise
         error('loadType not recognized')
 end
-
 fprintf('\n');
 
 % Give some output
 tiffInfo.NumFrames = numel(framesToWrite);
-

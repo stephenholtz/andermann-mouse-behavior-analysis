@@ -178,16 +178,18 @@ if processNidaqData
     interStimInt = 0.25;
     fprintf('Finding stimulus onsets in daq data\n');
     stimOnsets = getPtbStimOnsetsFromDaq(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
+    ledLogic = exp.Data(daqCh.LED,:) > 3.5;
 
     % Generate structure with stimulus types and timing (other variables are for debug)
     stimsPerBlock = numel(stim.stimLocOrder);
-    [stimCell,stimInds,blockInds] = makeStimTypeStruct(stimOnsets,stimOrder,stim.nRepeats,stimsPerBlock);
+    [stimCell,stimInds,ledInds,blockInds] = makeStimTypeStruct(stimOnsets,ledLogic,stimOrder,stim.nRepeats,stimsPerBlock);
 
     stimTsInfo.allStructure = {'Block','Stim','Rep'};
     stimTsInfo.all = stimCell;
     stimTsInfo.onsets = stimOnsets;
     stimTsInfo.inds = stimInds;
     stimTsInfo.blocks = blockInds;
+    stimTsInfo.ledOn = ledLogic;
 
     % Save stimulus timing info
     stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);
