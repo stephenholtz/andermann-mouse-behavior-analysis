@@ -20,7 +20,7 @@
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
-forceClear = 1;
+forceClear = 0;
 if forceClear
     clear all force
     close all force
@@ -33,9 +33,9 @@ experimentName  = '20140815_01';
 
 % Process only some of files (testing time)
 processEyeFiles     = 0;
-processFaceFiles    = 0;
+processFaceFiles    = 1;
 processEpiFiles     = 0;
-processNidaqData    = 1;
+processNidaqData    = 0;
 
 %% Establish base filepaths
 
@@ -78,9 +78,10 @@ if exist(eyeDir,'dir') && processEyeFiles
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
+    loadType = 'allAtOnce';
     eyeTiffFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.tiff']);
     [~,fN,ext] = fileparts(eyeAviFileName);
-    [eyeTiffInfo, eyeMat] = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType);
+    eyeTiffInfo = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType,loadType);
     % 41235 had issue "comma separated list has zero items"
 elseif ~processEyeFiles
     fprintf('Skipping eye file preprocessing\n')
@@ -99,8 +100,10 @@ if exist(faceDir,'dir') && processFaceFiles
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
+    % Load types: allAtOnce, or serial
+    loadType = 'allAtOnce';
     faceTiffFileName = fullfile(procDir,['face_' animalName '_' experimentName '.tiff']);
-    [faceTiffInfo, faceMat] = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType);
+    faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType,loadType);
 elseif ~processFaceFiles
     fprintf('Skipping face file preprocessing\n')
 else
@@ -151,7 +154,7 @@ if processNidaqData
     nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
     load(nidaqFilePath);
 
-%% Retrieve camera frame numbers from daq
+    % Retrieve camera frame numbers from daq
     % Channel names are stored in exp.daqInNames for verification
     daqCh.epiStrobe  = 8;
     daqCh.faceStrobe = 9;
@@ -163,10 +166,10 @@ if processNidaqData
     frameNums.epi= getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe');
 
     % Save stimulus timing info
-    frameNumsFile = fullfile(procDir,['frame_nums_' animalName '_' experimentName '.mat']);
+    frameNumsFile = fullfile(procDir,['frameNums.mat']);
     save(frameNumsFile,'frameNums','-v7.3');
 
-%% Retrieve stimulus locations within timeseries LED on / off and signals from the 
+    % Retrieve stimulus locations within timeseries LED on / off and signals from the 
     % psychtoolbox let me reconstruct exp timeseries
     daqCh.LED       = 1;
     daqCh.PTB       = 2;
@@ -180,15 +183,15 @@ if processNidaqData
     stimsPerBlock = numel(stim.stimLocOrder);
     [stimCell,stimInds,blockInds] = makeStimTypeStruct(stimOnsets,stimOrder,stim.nRepeats,stimsPerBlock);
 
-    stimInfo.allStructure = {'Block','Stim','Rep'};
-    stimInfo.all = stimCell;
-    stimInfo.onsets = stimOnsets;
-    stimInfo.inds = stimInds;
-    stimInfo.blocks = blockInds;
+    stimTsInfo.allStructure = {'Block','Stim','Rep'};
+    stimTsInfo.all = stimCell;
+    stimTsInfo.onsets = stimOnsets;
+    stimTsInfo.inds = stimInds;
+    stimTsInfo.blocks = blockInds;
 
     % Save stimulus timing info
-    stimulusIndsInfoFile = fullfile(procDir,['stimulus_info_' animalName '_' experimentName '.mat']);
-    save(stimulusIndsInfoFile,'stimInfo','-v7.3');
+    stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);
+    save(stimulusIndsInfoFile,'stimTsInfo','-v7.3');
 else
     fprintf('Skipping nidaq processing\n')
 end

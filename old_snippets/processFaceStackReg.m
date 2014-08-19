@@ -36,9 +36,6 @@ expDir  = fullfile(dataDir,animalName,expDateNum);
 % Processed data filepath
 procDir = fullfile(expDir,'proc');
 
-faceTiffPath = dir([procDir filesep 'face_*.tiff']);
-faceTiffPath = fullfile(procDir,faceTiffPath(1).name);
-
 %% Find all the avi files (a bit of unneeded specificity)
 %movieDirName = 'whisker';
 %movieFileBaseName = 'whisker';
@@ -57,22 +54,43 @@ faceTiffPath = fullfile(procDir,faceTiffPath(1).name);
 %end
 %totalFrames = sum(nFrames);
 
-%% Import entire image for stackreg...
+%% Import entire face image for processing
+faceTiffPath = dir([procDir filesep 'face_*.tiff']);
+faceTiffPath = fullfile(procDir,faceTiffPath(1).name);
 imInfo = imfinfo(faceTiffPath);
+
 testing = 1;
 if testing
     junkData = unidrnd(10,numel(imInfo),4);
     faceMotion.stackReg = junkData;
     save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
+    framesToUse = 1:floor(numel(imInfo)/4);
+else
+    framesToUse = 1:numel(imInfo);
 end
-%framesToUse = 1:numel(imInfo);
-framesToUse = 1:floor(numel(imInfo)/4);
-faceImage = zeros(imInfo.Width,imInfo.Height,numel(framesToUse));
+faceImage = zeros(imInfo(1).Width,imInfo(1).Height,numel(framesToUse));
 for iFrame = framesToUse
    faceImage(:,:,iFrame) = imread(faceTiffPath,iFrame);
 end
 
-%sampleFrame = read(vObj(1),1);
+%% Import eye image stack for processing
+eyeTiffPath = dir([procDir filesep 'eye_*.tiff']);
+eyeTiffPath = fullfile(procDir,eyeTiffPath(1).name);
+eyeImInfo = imfinfo(eyeTiffPath);
+
+testing = 1;
+if testing
+    junkData = unidrnd(10,numel(eyeImInfo),4);
+    eyeMotion.stackReg = junkData;
+    save(fullfile(procDir,'eyeMotion.mat'),'eyeMotion','-v7.3')
+    eyeFramesToUse = 1:floor(numel(eyeImInfo)/4);
+else
+    eyeframesToUse = 1:numel(imInfo);
+end
+eyeImage = zeros(imInfo(1).Width,imInfo(1).Height,numel(eyeFramesToUse));
+for iFrame = framesToUse
+   eyeImage(:,:,iFrame) = imread(eyeTiffPath,iFrame);
+end
 
 % Find a region of interest for the snout tracking
 % Seems like slecting part of the nose helps

@@ -1,5 +1,4 @@
-function [tiffInfo, mat] = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,saveFileName,compression)
-% function [tiffInfo, mat] = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,saveFileName)
+function tiffInfo = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,saveFileName,compression,loadType)
 %  Very simple avi reading and tiff writing with bigtiff format
 %
 %  Takes an argument for compression type. Should use JPEG for the videos, 
@@ -7,8 +6,6 @@ function [tiffInfo, mat] = aviToMatBigTiff(aviFileCellArray,aviFileDirectory,sav
 %  
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
-
-mat = [];
 
 % Get info about AVI files
 for iAvi = 1:numel(aviFileCellArray)
@@ -32,7 +29,6 @@ switch vObj(1).VideoFormat
 end
 
 % Open up a BigTIFF file to write to
-t = Tiff(saveFileName,'w8');
 tagstruct.ImageLength = nImgRows;
 tagstruct.ImageWidth = nImgCols;
 tagstruct.Photometric = Tiff.Photometric.MinIsBlack;
@@ -63,35 +59,57 @@ end
 
 fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
 updateIncrement = ceil(log10(numel(framesToWrite)));
-% Write all the frames to a tiffstack
-for iFrame = framesToWrite
-    % Find the correct avi file to read (if needed)
-    iAvi = find(cumsum(nFrames) > iFrame, 1, 'first');
-    aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
-    currRawFrame = read(vObj(iAvi),aviFrame);
 
-    if doRgbToGray
-        currFrame = rgb2gray(currRawFrame); 
-    else
-        currFrame = currRawFrame;
-    end
-    
-    % Write the tag structure for each frame
-    t.setTag(tagstruct);
-    t.write(currFrame);
+switch loadType
+    case {'serial',1}
+        %Use function from file exchange, a good deal faster but very
+        % inefficient
+        rawFrames = (zeros(nImgRows,nImgCols,numel(framesToWrite)));
+        for iFrame = framesToWrite
+            iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
+            aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+            currRawFrame = read(vObj(iAvi),aviFrame);        
+            rawFrames(:,:,iFrame) = currRawFrame(:,:,1);
+            if ~mod(iFrame,updateIncrement)
+                fprintf([repmat('\b',1,19) '%8.d / %8.d'],iFrame,numel(framesToWrite));
+            end
+        end
+        writetiff(rawFrames,saveFileName,'uint8');
+    case {'allAtOnce',2}
+        % Write all the frames to a tiffstack
+        t = Tiff(saveFileName,'w8');
+        for iFrame = framesToWrite
+            % Find the correct avi file to read (if needed)
+            iAvi = find(cumsum(nFrames) > iFrame, 1, 'first');
+            aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+            currRawFrame = read(vObj(iAvi),aviFrame);
 
-    if iFrame ~= framesToWrite(end)
-        t.writeDirectory();
-    end
-    if ~mod(iFrame,updateIncrement)
-        fprintf([repmat('\b',1,19) '%8.d / %8.d'],iFrame,numel(framesToWrite));
-    end
+            if doRgbToGray
+                currFrame = rgb2gray(currRawFrame); 
+            else
+                currFrame = currRawFrame;
+            end
+            
+            % Write the tag structure for each frame
+            t.setTag(tagstruct);
+            t.write(currFrame);
+
+            if iFrame ~= framesToWrite(end)
+                t.writeDirectory();
+            end
+            if ~mod(iFrame,updateIncrement)
+                fprintf([repmat('\b',1,19) '%8.d / %8.d'],iFrame,numel(framesToWrite));
+            end
+        end
+        % Close the tiff
+        t.close();
+        tiffInfo = tagstruct;
+    otherwise
+        error('loadType not recognized')
 end
+
 fprintf('\n');
 
-% Close the tiff
-t.close();
-
 % Give some output
-tiffInfo = tagstruct;
 tiffInfo.NumFrames = numel(framesToWrite);
+
