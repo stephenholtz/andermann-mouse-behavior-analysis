@@ -17,7 +17,7 @@ end
 % General Flags
 verbose     = 1;
 saveFigs    = 1;
-nRois = 1;
+nRois       = 1;
 
 % Fig Specific vars
 showDownsampAvis = 0;
@@ -29,40 +29,56 @@ saveSnoutAvi = 0;
 animalName  = 'K71';
 expDateNum  = '20140815_01';
 
-% Retrieve folder location
-dataDir     = getExpDataSource('atlas-pc');
-expDir      = fullfile(dataDir,animalName,expDateNum);
-saveDir     = fullfile(dataDir,'processing-data',animalName);
-if ~exist(saveDir,'dir')
-    mkdir(saveDir)
-end
+% Get the base location for data, see function for details
+dataDir = getExpDataSource('macbook');
+% Experiment directory
+expDir  = fullfile(dataDir,animalName,expDateNum);
+% Processed data filepath
+procDir = fullfile(expDir,'proc');
 
-% Find all the avi files (a bit of unneeded specificity)
-movieDirName = 'whisker';
-movieFileBaseName = 'whisker';
-aviLocation = fullfile([expDir filesep movieDirName]);
-aviFileStruct = dir([aviLocation filesep movieFileBaseName '*.avi']);
-% Sort the files by datenum to fix ordering problems
-[~,aviOrder]= sort([aviFileStruct(:).datenum]);
-aviFiles = {aviFileStruct(aviOrder).name}; 
+faceTiffPath = dir([procDir filesep 'face_*.tiff']);
+faceTiffPath = fullfile(procDir,faceTiffPath(1).name);
 
-%% Import avi files and select ROI(s)
+%% Find all the avi files (a bit of unneeded specificity)
+%movieDirName = 'whisker';
+%movieFileBaseName = 'whisker';
+%aviLocation = fullfile([expDir filesep movieDirName]);
+%aviFileStruct = dir([aviLocation filesep movieFileBaseName '*.avi']);
+%% Sort the files by datenum to fix ordering problems
+%[~,aviOrder]= sort([aviFileStruct(:).datenum]);
+%aviFiles = {aviFileStruct(aviOrder).name}; 
+
+%%% Import avi files and select ROI(s)
 % set up object instances
-for iAvi = 1:numel(aviFiles)
-    vObj(iAvi) = VideoReader(fullfile(aviLocation,aviFiles{iAvi}));
-    [~] = read(vObj(iAvi),inf);
-    nFrames(iAvi) = vObj(iAvi).NumberOfFrames;
+%for iAvi = 1:numel(aviFiles)
+%    vObj(iAvi) = VideoReader(fullfile(aviLocation,aviFiles{iAvi}));
+%    [~] = read(vObj(iAvi),inf);
+%    nFrames(iAvi) = vObj(iAvi).NumberOfFrames;
+%end
+%totalFrames = sum(nFrames);
+
+%% Import entire image for stackreg...
+imInfo = imfinfo(faceTiffPath);
+testing = 1;
+if testing
+    junkData = unidrnd(10,numel(imInfo),4);
+    faceMotion.stackReg = junkData;
+    save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
 end
-totalFrames = sum(nFrames);
+%framesToUse = 1:numel(imInfo);
+framesToUse = 1:floor(numel(imInfo)/4);
+faceImage = zeros(imInfo.Width,imInfo.Height,numel(framesToUse));
+for iFrame = framesToUse
+   faceImage(:,:,iFrame) = imread(faceTiffPath,iFrame);
+end
+
+%sampleFrame = read(vObj(1),1);
 
 % Find a region of interest for the snout tracking
-figure('Color',[1 1 1]);
-sampleFrame = read(vObj(1),1);
-
-% Make a rectangle where it looks about right
 % Seems like slecting part of the nose helps
 for iRoi = 1:nRois
     clf;
+    sampleFrame = faceImage(:,:,1);
     imagesc(sampleFrame);
     snout.RoiH{iRoi} = imrect(gca);
     snout.Pos{iRoi} = round(getPosition(snout.RoiH{iRoi}));
@@ -93,39 +109,51 @@ if showDownsampAvis
     end
 end
 
-%% Test stackRegister for acceptable movement performance
-% Take a subset of the frames for testing analysis
+% Make a substack with just this ROI
 %framesToUse = 1:6000;
-for iRoi = 1:numel(snout.Pos)
-    fprintf('\tMaking snoutStack %d of %d\n',iRoi,numel(snout.Pos))
-    snoutStack{iRoi} = (zeros(numel(snout.Yinds{iRoi}),numel(snout.Xinds{iRoi}),totalFrames));
+for iRoi = nRois
+    fprintf('Finding face motion, Frame %0.10d',1)
+    faceMotion = (zeros(numel(snout.Yinds{iRoi}),numel(snout.Xinds{iRoi}),numel(framesToUse)));
     frameIter = 1;
-    for iAvi = 1:numel(aviFiles)
-        fprintf('\t\tAVI %d of %d\n',iAvi,numel(aviFiles))
-        fprintf('\t\t\tFrame %0.10d',1)
-        for iFrame = 1:nFrames(iAvi)
-            if ~mod(iFrame,100)
-                fprintf('\b\b\b\b\b\b\b\b\b\b%0.10d',iFrame)
-            end
-            currFrame = (read(vObj(iAvi),iFrame));
-            snoutStack{iRoi}(:,:,frameIter) = currFrame(snout.Yinds{iRoi},snout.Xinds{iRoi});
-            frameIter = frameIter + 1; 
+    for iFrame = framesToUse
+        if ~mod(frameIter,100)
+            fprintf('\b\b\b\b\b\b\b\b\b\b%0.10d',iFrame)
         end
+        faceMotion(:,:,frameIter) = faceImage(snout.Yinds{iRoi},snout.Xinds{iRoi},iFrame);
+        frameIter = frameIter + 1; 
         fprintf('\n')
     end
 
-    if saveSnoutAvi
-        fprintf('\t\tWriting snout ROI %d to AVI',iRoi)
-        snoutObj(iRoi) = VideoWriter(fullfile(saveDir,['snoutStackRoi_' num2str(iRoi) '.avi']));
-        open(snoutObj(iRoi))
-        % Reshape doesn't work for this for some reason
-        for iFrame = 1:size(snoutStack{iRoi},3)
-            writeVideo(snoutObj(iRoi),(snoutStack{iRoi}(:,:,iFrame)));
-        end
-        close(snoutObj(iRoi));
-    end
+%    if 0
+%        faceMotion{iRoi} = (zeros(numel(snout.Yinds{iRoi}),numel(snout.Xinds{iRoi}),totalFrames));
+%        frameIter = 1;
+%        for iAvi = 1:numel(aviFiles)
+%            fprintf('\t\tAVI %d of %d\n',iAvi,numel(aviFiles))
+%            fprintf('\t\t\tFrame %0.10d',1)
+%            for iFrame = 1:nFrames(iAvi)
+%                if ~mod(iFrame,100)
+%                    fprintf('\b\b\b\b\b\b\b\b\b\b%0.10d',iFrame)
+%                end
+%                currFrame = (read(vObj(iAvi),iFrame));
+%                faceMotion{iRoi}(:,:,frameIter) = currFrame(snout.Yinds{iRoi},snout.Xinds{iRoi});
+%                frameIter = frameIter + 1; 
+%            end
+%            fprintf('\n')
+%        end
+%    end
+%    if saveSnoutAvi
+%        fprintf('\t\tWriting snout ROI %d to AVI',iRoi)
+%        snoutObj(iRoi) = VideoWriter(fullfile(saveDir,['snoutStackRoi_' num2str(iRoi) '.avi']));
+%        open(snoutObj(iRoi))
+%        % Reshape doesn't work for this for some reason
+%        for iFrame = 1:size(snoutStack{iRoi},3)
+%            writeVideo(snoutObj(iRoi),(snoutStack{iRoi}(:,:,iFrame)));
+%        end
+%        close(snoutObj(iRoi));
+%    end
 end
-save(fullfile(saveDir,'snoutStack.mat'),'snoutStack','snout','-v7.3')
+%save(fullfile(procDir,'faceMotion.mat'),'faceMotion','snout','-v7.3')
+
 
 %% Use a rigid registration algorithm (fft of 2d xcorr?) to figure out movement
 % From stackRegister: (call will be verbose)
@@ -134,10 +162,11 @@ save(fullfile(saveDir,'snoutStack.mat'),'snoutStack','snout','-v7.3')
 %               (should be zero if images real and non-negative).
 %      OUTS(:,3) is net row shift
 %      OUTS(:,4) is net column shift
-for iRoi = 1:numel(snoutStack)
-    [stackRegOut{iRoi},regStack{iRoi}] = stackRegister(snoutStack{iRoi},snoutStack{iRoi}(:,:,floor(totalFrames/4)));
+for iRoi = 1
+    [stackRegOut,regStack] = stackRegister(faceMotion,faceMotion(:,:,10));
 end
-save(fullfile(saveDir,'stackRegOut.mat'),'stackRegOut','-v7.3')
+faceMotion.stackReg = stackRegOut;
+save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
 
 %% Make an AVI to Look at rough movements and video problems
 if makeStackRegSnoutAvi

@@ -1,5 +1,5 @@
-function frameNum = getFrameNumDaq(daqData,outputType)
-%function frameNum = getFrameNumDaq(daqData,outputType)
+function frameNum = getFrameNumFromDaq(daqData,outputType)
+%function frameNum = getFrameNumFromDaq(daqData,outputType)
 % Determine which points in the DAQ's timeseries correspond to camera frame numbers
 %
 % Takes counter data from daq and returns a frame count vector for indexing into. 
@@ -13,7 +13,7 @@ switch lower(outputType)
         frameNum = cumsum(strobeOnsets);
     case {'counter'}
         frameNum = daqData;
-        warning('Not yet coded')
+        warning('Counter troubleshooting is not yet coded')
     otherwise
         error('outputType not recognized')
 end

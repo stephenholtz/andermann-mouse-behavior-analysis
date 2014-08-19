@@ -13,13 +13,14 @@
 %        /raw/stimulus_*.mat
 %        /proc/...
 %        /proc/*.tiff
+%        /proc/stimInfo.mat
 %        .... filled in by this script's functions
 %
 % TODO: update file directory above with expected ouptut
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
-forceClear = 0;
+forceClear = 1;
 if forceClear
     clear all force
     close all force
@@ -31,9 +32,9 @@ animalName      = 'K71';
 experimentName  = '20140815_01';
 
 % Process only some of files (testing time)
-processEyeFiles     = 1;
-processFaceFiles    = 1;
-processEpiFiles     = 1;
+processEyeFiles     = 0;
+processFaceFiles    = 0;
+processEpiFiles     = 0;
 processNidaqData    = 1;
 
 %% Establish base filepaths
@@ -126,29 +127,68 @@ end
 
 %% process Nidaq data
 if processNidaqData
-    fprintf('Starting nidaq processing\n')
-    nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
-    nidaqFilePath = fullfile(rawDir,nidaqFileName.name);
+    fprintf('Starting nidaq / metadata processing\n')
+
+    % loads in metadata
+    metaFileName = dir(fullfile(rawDir,['stimulus_metadata_*.mat']));
+    metaFilePath = fullfile(rawDir,metaFileName(1).name);
+    load(metaFilePath)
+
+    % Construct stimulus order (should place in exp script in the future)
+    if isfield(stim,'stimTypeOrder')
+        stimOrder = stim.stimTypeOrder; 
+    else
+        % Numbers all conditions with unique values
+        stimOrder = zeros(numel(stim.stimLocOrder)*stim.nRepeats,1);
+        for iStim = 1:numel(stimOrder)
+            stimInd = 1+mod(iStim-1,numel(stim.stimLocOrder));
+            stimOrder(iStim) = stim.stimLocOrder(stimInd) + numel(unique(stim.stimLocOrder))*stim.ledOnOffOrder(stimInd);
+        end
+    end
 
     % loads in 'exp' struct
+    nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
+    nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
     load(nidaqFilePath);
 
-    % Retrieve camera frame numbers from daq
+%% Retrieve camera frame numbers from daq
+    % Channel names are stored in exp.daqInNames for verification
     daqCh.epiStrobe  = 8;
     daqCh.faceStrobe = 9;
     daqCh.eyeCount   = 17;
 
-    faceFrameNums = getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe');
-    eyeFrameNums = getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter');
-    epiFrameNums = getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe');
+    fprintf('Finding frame onsets in daq data\n');
+    frameNums.face= getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe');
+    frameNums.eye= getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter');
+    frameNums.epi= getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe');
 
-    % Retrieve stimulus locations within timeseries 
+    % Save stimulus timing info
+    frameNumsFile = fullfile(procDir,['frame_nums_' animalName '_' experimentName '.mat']);
+    save(frameNumsFile,'frameNums','-v7.3');
+
+%% Retrieve stimulus locations within timeseries LED on / off and signals from the 
+    % psychtoolbox let me reconstruct exp timeseries
     daqCh.LED       = 1;
-    daqCh.ptb       = 2;
+    daqCh.PTB       = 2;
 
-    %getStimTypeIndsFromDaq(exp.Data(daqCh.LED));
+    % For easy parsing, specify inter stim interval
+    interStimInt = 0.25;
+    fprintf('Finding stimulus onsets in daq data\n');
+    stimOnsets = getPtbStimOnsetsFromDaq(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
 
+    % Generate structure with stimulus types and timing (other variables are for debug)
+    stimsPerBlock = numel(stim.stimLocOrder);
+    [stimCell,stimInds,blockInds] = makeStimTypeStruct(stimOnsets,stimOrder,stim.nRepeats,stimsPerBlock);
+
+    stimInfo.allStructure = {'Block','Stim','Rep'};
+    stimInfo.all = stimCell;
+    stimInfo.onsets = stimOnsets;
+    stimInfo.inds = stimInds;
+    stimInfo.blocks = blockInds;
+
+    % Save stimulus timing info
+    stimulusIndsInfoFile = fullfile(procDir,['stimulus_info_' animalName '_' experimentName '.mat']);
+    save(stimulusIndsInfoFile,'stimInfo','-v7.3');
 else
     fprintf('Skipping nidaq processing\n')
 end
-
