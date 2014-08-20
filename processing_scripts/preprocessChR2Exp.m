@@ -41,7 +41,12 @@ processNidaqData    = 0;
 %% Establish base filepaths
 
 % Get the base location for data, see function for details
-dataDir = getExpDataSource('atlas-pc');
+if ispc
+    dataDir = getExpDataSource('atlas-pc');
+elseif ismac
+    dataDir = getExpDataSource('macbook');
+end
+
 % Experiment directory
 expDir  = fullfile(dataDir,animalName,experimentName);
 % Raw data filepath 
@@ -68,7 +73,7 @@ end
 % Convert eye tracking jpegs to Avi, then to tiff
 eyeDir = fullfile(rawDir,'eye');
 if exist(eyeDir,'dir') && processEyeFiles
-    fprintf('Starting eye file preprocessing\n')
+    fprintf('Starting eye file preprocessing...\n')
     % Sort the file names and pass to converter fuction
     eyeDirFiles = dir([eyeDir filesep '*.jpg']);
     [~,eyeFileOrder]= sort([eyeDirFiles(:).datenum]);
@@ -85,7 +90,7 @@ if exist(eyeDir,'dir') && processEyeFiles
     eyeTiffInfo = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType,loadType);
     % 41235 had issue "comma separated list has zero items"
 elseif ~processEyeFiles
-    fprintf('Skipping eye file preprocessing\n')
+    fprintf('Skipping eye file preprocessing...\n')
 else
     error('eyeDir not found')
 end
@@ -93,20 +98,30 @@ end
 % Convert face tracking avi files to tiff stacks
 faceDir = fullfile(rawDir,'face');
 if exist(faceDir,'dir') && processFaceFiles
-    fprintf('Starting face file preprocessing\n')
+    fprintf('Starting face file preprocessing...\n')
     % Sort the file names and pass to converter function
     faceDirFiles = dir([faceDir filesep '*.avi']);
     [~,faceFileOrder]= sort([faceDirFiles(:).datenum]);
     faceFileNames = {faceDirFiles(faceFileOrder).name};
 
     % Convert avi to tiff and mat files (expects cell array)
-    compressionType = 'jpeg';
-    % Load types: allAtOnce,byMovie,byMovieParFor, or serial
-    loadType = 'byMovie';
-    faceTiffFileName = fullfile(procDir,['face_' animalName '_' experimentName '.tiff']);
-    faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType,loadType);
+    compression = 'jpeg';
+
+    faceStackDir = fullfile(procDir,'faceStacks');
+    if ~exist(faceStackDir,'dir')
+        mkdir(faceStackDir)
+    end
+
+    %%Load types: allAtOnce,byMovie,byMovieParFor, or serial
+    %loadType = 'writeFolder';
+    %faceTiffFileName = fullfile(faceStackDir,['face_' animalName '_' experimentName '.tiff']);
+    %faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compression,loadType);
+
+    faceTiffName = [animalName '_' experimentName '.tiff'];
+    aviToTiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression);
+
 elseif ~processFaceFiles
-    fprintf('Skipping face file preprocessing\n')
+    fprintf('Skipping face file preprocessing...\n')
 else
     error('faceDir not found')
 end
@@ -114,7 +129,7 @@ end
 % Convert epifluorescence avi files to tiff stacks
 epiDir = fullfile(rawDir,'epi');
 if exist(epiDir,'dir') && processEpiFiles
-    fprintf('Starting epi file preprocessing\n')
+    fprintf('Starting epi file preprocessing...\n')
     % Should only be one avi file with epi data
     epiDirFiles = dir([epiDir filesep 'epi*.avi']);
     epiFileNames = {epiDirFiles(1).name};
@@ -125,14 +140,14 @@ if exist(epiDir,'dir') && processEpiFiles
     epiTiffFileName = fullfile(procDir,['epi_' animalName '_' experimentName '.tiff']);
     epiTiffInfo = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType,loadType);
 elseif ~processEpiFiles
-    fprintf('Skipping epi files preprocessing\n')
+    fprintf('Skipping epi files preprocessing...\n')
 else
     error('faceDir not found')
 end
 
 %% process Nidaq data
 if processNidaqData
-    fprintf('Starting nidaq / metadata processing\n')
+    fprintf('Starting nidaq / metadata processing...\n')
 
     % loads in metadata
     metaFileName = dir(fullfile(rawDir,['stimulus_metadata_*.mat']));
@@ -197,7 +212,7 @@ if processNidaqData
     stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);
     save(stimulusIndsInfoFile,'stimTsInfo','-v7.3');
 else
-    fprintf('Skipping nidaq processing\n')
+    fprintf('Skipping nidaq processing...\n')
 end
 
 tElapsed = toc(ticH);

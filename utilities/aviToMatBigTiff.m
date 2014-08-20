@@ -55,6 +55,123 @@ framesToWrite = 1:sum(nFrames);
 updateIncrement = ceil(log10(numel(framesToWrite)));
 
 switch loadType
+    case {'writeFolder',0}
+        % Write 2k stacks from the AVIs to a folder, with a frameInfo.mat file for lookup
+        % they are ordered, but include a field just incase it isn't clear
+        nPerStack = 1000;
+        totalFrames = sum(nFrames);
+        framesLeft = 1:totalFrames;
+        iStack = 1;
+        [d,f,e] = fileparts(saveFileName);
+
+        while ~isempty(framesLeft)
+            if numel(framesLeft) < nPerStack
+                currFrames = framesLeft;
+            else
+                currFrames = framesLeft(1:nPerStack);
+            end
+
+            % Set up the name of the stack
+            prepend = num2str(iStack);
+            while numel(prepend) < 5
+                prepend =['0' prepend];
+            end
+
+            firstFrame = num2str(currFrames(1));
+            while numel(prepend) < 8 
+                firstFrame =['0' firstFrame];
+            end
+
+            lastFrame = num2str(currFrames(end));
+            while numel(prepend) < 8
+                lastFrame =['0' lastFrame];
+            end
+
+            frameInfo(iStack).fileName = [prepend '_f' firstFrame '_l' lastFrame '_' f e ];
+            frameInfo(iStack).stackNum = iStack;
+            frameInfo(iStack).frameNums = currFrames;
+            frameInfo(iStack).nTotalFrames = totalFrames;
+
+            % Store the names of the avis that the frames came from
+            aviUsed = zeros(numel(currFrames),1);
+            iter = 1;
+            for iFrame = currFrames
+                aviUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
+                iter = iter + 1;
+            end 
+            frameInfo(iStack).fileSource = aviFileCellArray(unique(aviUsed));
+
+            % Store the inds of the avis that the frames came from
+            for i = 1:numel(frameInfo(iStack).fileSource)
+                frameIter = 1;
+                for iFrame = currFrames 
+                    aviUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
+                    aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+                    frameInfo(iStack).aviFrameNum{i}(frameIter) = aviFrame;
+                    frameIter = frameIter + 1;
+                end
+            end
+            
+            if numel(framesLeft) >= nPerStack
+                framesLeft = framesLeft(nPerStack+1:end);
+            else
+                framesLeft = [];
+            end
+            iStack = iStack + 1;
+        end 
+        
+        % save frameInfo struct
+        save(fullfile(d,'frameInfo.mat'),'frameInfo','-v7.3')
+        fprintf('Saved: %s\n',fullfile(d,'frameInfo.mat'))
+
+        % Write each of the tiffstacks in parpool
+        %try
+        %    if isempty(gcp)
+        %        parpool;
+        %    end
+        %    legacyPar = 0;
+        %catch ME %#ok<*NASGU>
+        %     matlabpool('open',4);
+        %     legacyPar = 1;
+        %end
+
+        % For just grabbing
+        takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
+
+        % Complex for parfor, would need to pregenerate all needd objects...
+        aviFrame = 0;
+        stacksToWrite = 1:numel(frameInfo);
+        for iStack = stacksToWrite
+            % Read in the images for this stack with VideoRead
+            frameIter = 1;
+            framesToUse = frameInfo(iStack).frameNums;
+            rawFrames = uint8(zeros(nImgRows,nImgCols,numel(frameInfo(iStack).frameNums)));
+            fprintf('\nAVI loading for stack %d / %d\n',iStack,numel(stacksToWrite));
+            fprintf('\tAVI frame %8.d / %8.d',frameIter,numel(framesToUse));
+            for iFrame = framesToUse
+                if ~mod(frameIter,ceil(nPerStack/10));
+                    fprintf([repmat('\b',1,29) 'AVI frame %8.d / %8.d'],frameIter,numel(framesToUse));
+                end
+                iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
+                aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+                rawFrames(:,:,frameIter) = takeOne3rdDim(read(vObj(iAvi),aviFrame));        
+                frameIter = frameIter + 1;
+            end
+            fprintf('\nTiff writing for stack %d of %d\n',iStack,numel(stacksToWrite));
+            option.BitsPerSample = 8;
+            option.Append = false;
+            option.Compression = 'LZW';
+            option.BigTiff = true;
+            tiffWrite(rawFrames,frameInfo(iStack).fileName,d,option)
+        end
+
+        % Clean up parpool objects
+        %if legacyPar
+        %    matlabpool('close')
+        %elseif ~isempty(gcp)
+        %    delete(gcp)
+        %end
+       
     case {'allAtOnce',1}
         % Load all frames into memory and then write tiff stack
         fprintf('\nConverting AVI(s) to Tiff Stack: %.8d / %8.d',1,numel(framesToWrite));
@@ -82,17 +199,17 @@ switch loadType
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         try
             parpool(4)
-            useParpool = 1;
+            legacyPar = 1;
         catch ME %#ok<*NASGU>
             matlabpool('open',4);
-            useParpool = 1;
+            legacyPar = 1;
         end
         parfor iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
             rawFrames{iAvi} = takeOne3rdDim(read(vObj(iAvi)));
             disp(['Finished iAvi : ' num2str(iAvi)])
         end
-        if ~useParpool
+        if ~legacyPar
             matlabpool('close')
         end
         frames = [];
@@ -110,10 +227,10 @@ switch loadType
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         try
             parpool(4)
-            useParpool = 1;
+            legacyPar = 1;
         catch ME %#ok<*NASGU>
             matlabpool('open',4);
-            useParpool = 1;
+            legacyPar = 1;
         end
         for iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
@@ -134,7 +251,7 @@ switch loadType
             %%startupMA
             %%writetiff(frames,currFileName,'uint8');
         end
-        if ~useParpool
+        if ~legacyPar
             matlabpool('close')
         end        
         
