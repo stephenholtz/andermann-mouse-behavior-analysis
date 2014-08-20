@@ -26,6 +26,7 @@ if forceClear
     close all force
     fprintf('Cleared workspace\n');
 end
+ticH = tic;
 
 %% Set Animal/Experiment Specific information
 animalName      = 'K71';
@@ -34,7 +35,7 @@ experimentName  = '20140815_01';
 % Process only some of files (testing time)
 processEyeFiles     = 0;
 processFaceFiles    = 1;
-processEpiFiles     = 1;
+processEpiFiles     = 0;
 processNidaqData    = 0;
 
 %% Establish base filepaths
@@ -100,8 +101,8 @@ if exist(faceDir,'dir') && processFaceFiles
 
     % Convert avi to tiff and mat files (expects cell array)
     compressionType = 'jpeg';
-    % Load types: allAtOnce,byMovieParFor, or serial
-    loadType = 'byMovieParFor';
+    % Load types: allAtOnce,byMovie,byMovieParFor, or serial
+    loadType = 'byMovie';
     faceTiffFileName = fullfile(procDir,['face_' animalName '_' experimentName '.tiff']);
     faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compressionType,loadType);
 elseif ~processFaceFiles
@@ -198,3 +199,5 @@ if processNidaqData
 else
     fprintf('Skipping nidaq processing\n')
 end
+
+tElapsed = toc(ticH);

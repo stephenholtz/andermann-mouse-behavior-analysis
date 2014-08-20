@@ -75,7 +75,7 @@ switch loadType
             imwrite(rawFrames,saveFileName)
         end
 
-    case {'byMovieParFor',2}
+    case {'byMovieFullLoadParFor',2}
         % Works okay on the server, loads in each movie, takes the relevant
         % dimension and then writes the concatenated stack as a tiff...
         % depends on having a lot of free ram...
@@ -105,8 +105,64 @@ switch loadType
         else
             imwrite(frames,saveFileName)
         end
-
-    case {'serial',3}
+    case {'byMovieParFor',3}
+        % Works okay on the server, writes a series of tiffs
+        takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
+        try
+            parpool(4)
+            useParpool = 1;
+        catch ME %#ok<*NASGU>
+            matlabpool('open',4);
+            useParpool = 1;
+        end
+        for iAvi = 1:numel(vObj)
+            disp(['Started iAvi : ' num2str(iAvi)])
+            frames = takeOne3rdDim(read(vObj(iAvi)));
+            disp(['Finished iAvi : ' num2str(iAvi)])
+            [d,f,e]=fileparts(saveFileName);
+            if numel(num2str(iAvi)) < 10
+                prepend =['0' num2str(iAvi)];
+            else
+                prepend = num2str(iAvi);
+            end
+            currFileName = fullfile(d,[prepend '_' f e]);
+            options.color = false;
+            options.append = false;
+            options.append = 'lzw';
+            saveastiff(frames,currFileName,options);
+            %%%Very very large files written with x12 blowup from AVI!!
+            %%startupMA
+            %%writetiff(frames,currFileName,'uint8');
+        end
+        if ~useParpool
+            matlabpool('close')
+        end        
+        
+    case {'byMovie',4}
+        % Works okay on the server, writes a series of tiffs
+        takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
+        for iAvi = 1:numel(vObj)
+            disp(['Started iAvi : ' num2str(iAvi)])
+            frames = takeOne3rdDim(read(vObj(iAvi)));
+            disp(['Finished iAvi : ' num2str(iAvi)])
+            [d,f,e]=fileparts(saveFileName);
+            if numel(num2str(iAvi)) < 10
+                prepend =['0' num2str(iAvi)];
+            else
+                prepend = num2str(iAvi);
+            end
+            currFileName = fullfile(d,[prepend '_' f e]);
+            options.color = false;
+            options.append = true;
+            options.append = 'lzw';
+            disp(['Curr tiff name: ' currFileName])
+            saveastiff(frames,currFileName,options);
+            %%%Very very large files written with x12 blowup from AVI!!
+            %%startupMA
+            %%writetiff(frames,currFileName,'uint8');
+        end
+        
+    case {'serial',5}
         fprintf('\nConverting AVI(s) to BigTiff Stack: %.8d / %8.d',1,numel(framesToWrite));
         % Write all the frames to a tiffstack
         t = Tiff(saveFileName,'w8');
@@ -143,3 +199,4 @@ fprintf('\n');
 
 % Give some output
 tiffInfo.NumFrames = numel(framesToWrite);
+tiffInfo.saveFileName = saveFileName;
