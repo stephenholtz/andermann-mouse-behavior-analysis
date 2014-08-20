@@ -143,7 +143,7 @@ switch loadType
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         for iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
-            for i = 1:200
+            for i = 1:100
                 frames(:,:,i) = takeOne3rdDim(read(vObj(iAvi),i));
             end
             disp(['Finished iAvi : ' num2str(iAvi)])
@@ -173,16 +173,17 @@ switch loadType
                         disp(['Frames written: ' num2str(i)]);
                     end
                     try
-                        if i ~= 1
+                        if i == 1
                             imwrite(frames(:,:,i),currFileName,'WriteMode','overwrite')
                         else
                             imwrite(frames(:,:,i),currFileName,'WriteMode','append')
+                            disp(i)
                         end
-                        written = 0;
+                        written = 1;
                         i = i + 1;
                     catch STUPID
                         disp(['STUPID: permission error, trying again on frame ' num2str(i)])
-                        written = 1;
+                        written = 0;
                         pause(.05)
                     end
                 end
