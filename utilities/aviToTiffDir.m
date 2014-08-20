@@ -1,13 +1,26 @@
-function tiffInfo = aviToTiffFolder(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compression)
+function aviToTiffDir(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compression)
 %%function tiffInfo = aviToTiffFolder(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compression)
 %  
-%  Takes an argument for compression type. Should use JPEG for the videos, 
-%  and LZW or none for epi data.
+%   aviFileNames - cell array of filenames for all avi files
+%   aviFileDir - directory where avi file(s) are located
+%   tiffFileBaseName - base name that will be prepended
+%   tiffFileDir - dir that tiff stacks will be written to
+%   compression - use 'JPEG' or 'LZW'
+%
+%   Lots of text output, should add verbose flags.
+%   Does not have much input error checking, careful!
 %  
 % SLH 2014
 %#ok<*NBRAK,*UNRCH,*AGROW>
+verbose = 1;
+if verbose
+    fprintf('\nConverting AVI files to tiff stacks!\n');
+end
 
 %% Create AVI objects
+if verbose
+    fprintf('Creating VideoReader objects\n');
+end
 for i = 1:numel(aviFileNames)
     vObj(i) = VideoReader(fullfile(aviFileDir,aviFileNames{i}));
     [~] = read(vObj(i),inf);
@@ -39,6 +52,11 @@ framesLeft  = 1:totalFrames;
 
 %% Make a struct with information on each stack and the frames within
 iStack = 1;
+
+if verbose
+    fprintf('Creating frameInfo.mat struct\n')
+end
+
 while ~isempty(framesLeft)
 
     % Update the current frames
@@ -50,21 +68,21 @@ while ~isempty(framesLeft)
 
     % Set up the name of the stack
     prepend = num2str(iStack);
-    while numel(prepend) < 5
+    while numel(prepend) < 4
         prepend =['0' prepend];
     end
 
     firstFrame = num2str(currFrames(1));
-    while numel(prepend) < 8 
+    while numel(firstFrame) < 6 
         firstFrame =['0' firstFrame];
     end
 
     lastFrame = num2str(currFrames(end));
-    while numel(prepend) < 8
+    while numel(lastFrame) < 6
         lastFrame =['0' lastFrame];
     end
 
-    frameInfo(iStack).fileName = [prepend '_f' firstFrame '_l' lastFrame '_' tiffFileBaseName];
+    frameInfo(iStack).fileName = [prepend '_s' firstFrame '_e' lastFrame '_' tiffFileBaseName];
     frameInfo(iStack).stackNum = iStack;
     frameInfo(iStack).frameNums = currFrames;
     frameInfo(iStack).nTotalFrames = totalFrames;
@@ -76,7 +94,7 @@ while ~isempty(framesLeft)
         aviUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
         iter = iter + 1;
     end 
-    frameInfo(iStack).fileSource = aviFileCellArray(unique(aviUsed));
+    frameInfo(iStack).fileSource = aviFileNames(unique(aviUsed));
 
     % Store the inds of the avis that the frames came from (clunky)
     for i = 1:numel(frameInfo(iStack).fileSource)
@@ -100,7 +118,9 @@ end
 
 % Save the frameInfo.mat file for later use (reduntant with filenames)
 save(fullfile(tiffFileDir,'frameInfo.mat'),'frameInfo','-v7.3')
-fprintf('Saved: %s\n',fullfile(tiffFileDir,'frameInfo.mat'))
+if verbose
+    fprintf('Saved: %s\n',fullfile(tiffFileDir,'frameInfo.mat'))
+end
 
 % Anon func for grabbing that is faster than RGB conversion
 takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
@@ -116,11 +136,13 @@ for iStack = stacksToWrite
     rawFrames = uint8(zeros(nRows,nCols,numel(frameInfo(iStack).frameNums)));
 
     % Print output
-    fprintf('\nAVI loading for stack %d / %d\n',iStack,numel(stacksToWrite));
-    fprintf('\tAVI frame %8.d / %8.d',frameIter,numel(framesInStack));
+    if verbose; 
+        fprintf('\nAVI loading for stack %d / %d',iStack,numel(stacksToWrite));
+        fprintf('\n\tAVI frame %8.d / %8.d',frameIter,numel(framesInStack));
+    end
 
     for iFrame = framesInStack
-        if ~mod(frameIter,ceil(nPerStack/10));
+        if verbose && ~mod(frameIter,ceil(nPerStack/10));
             fprintf([repmat('\b',1,29) 'AVI frame %8.d / %8.d'],frameIter,numel(framesInStack));
         end
 
@@ -136,12 +158,14 @@ for iStack = stacksToWrite
         frameIter = frameIter + 1;
     end
 
-    fprintf('\nTiff writing for stack %d of %d\n',iStack,numel(stacksToWrite));
+    if verbose
+        fprintf('\nTiff writing for stack %d of %d\n',iStack,numel(stacksToWrite));
+    end
 
     % Use modified Harvey Lab writer (cleaner than mine)
     option.BitsPerSample = BitsPerPixel;
     option.Append = false;
-    option.Compression = 'LZW';
+    option.Compression = compression;
     option.BigTiff = true;
 
     tiffWrite(rawFrames,frameInfo(iStack).fileName,tiffFileDir,option)

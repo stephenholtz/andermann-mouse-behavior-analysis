@@ -135,10 +135,19 @@ if exist(epiDir,'dir') && processEpiFiles
     epiFileNames = {epiDirFiles(1).name};
 
     % Convert avi to tiff and mat files
-    compressionType = 'lzw';
-    loadType = 'serial';    
-    epiTiffFileName = fullfile(procDir,['epi_' animalName '_' experimentName '.tiff']);
-    epiTiffInfo = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType,loadType);
+    loader = 1;
+    switch loader
+        case 1
+            compressionType = 'lzw';
+            loadType = 'serial';
+            epiTiffFileName = fullfile(procDir,['epi_' animalName '_' experimentName '.tiff']);
+            epiTiffInfo = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType,loadType);
+        case 2
+            error('finish')
+            compression = 'lzw';
+            faceTiffName = ['epi_' animalName '_' experimentName '.tiff'];
+            aviToTiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression);
+    end
 elseif ~processEpiFiles
     fprintf('Skipping epi files preprocessing...\n')
 else
