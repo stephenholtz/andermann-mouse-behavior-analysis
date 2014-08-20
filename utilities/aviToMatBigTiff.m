@@ -143,7 +143,9 @@ switch loadType
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         for iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
-            frames = takeOne3rdDim(read(vObj(iAvi)));
+            for i = 1:200
+                frames(:,:,i) = takeOne3rdDim(read(vObj(iAvi),i));
+            end
             disp(['Finished iAvi : ' num2str(iAvi)])
             [d,f,e]=fileparts(saveFileName);
             if numel(num2str(iAvi)) < 10
@@ -154,9 +156,41 @@ switch loadType
             currFileName = fullfile(d,[prepend '_' f e]);
             options.color = false;
             options.append = true;
-            options.append = 'lzw';
+            options.comp = 'none';
             disp(['Curr tiff name: ' currFileName])
-            saveastiff(frames,currFileName,options);
+            
+            % This is how to use matlab's imwrite in a stable way...
+
+            i = 1;
+            while i <= size(frames,3) 
+                written = 0;   
+                while ~written
+                    % Not sure how this situation occurs, but required
+                    if i > size(frames,3)
+                        break
+                    end
+                    if ~mod(i,100)
+                        disp(['Frames written: ' num2str(i)]);
+                    end
+                    try
+                        if i ~= 1
+                            imwrite(frames(:,:,i),currFileName,'WriteMode','overwrite')
+                        else
+                            imwrite(frames(:,:,i),currFileName,'WriteMode','append')
+                        end
+                        written = 0;
+                        i = i + 1;
+                    catch STUPID
+                        disp(['STUPID: permission error, trying again on frame ' num2str(i)])
+                        written = 1;
+                        pause(.05)
+                    end
+                end
+            end
+            
+            %%%does not work for large files, stay as corrupt temporary
+            %%%files... 
+            %saveastiff(frames,currFileName,options);
             %%%Very very large files written with x12 blowup from AVI!!
             %%startupMA
             %%writetiff(frames,currFileName,'uint8');
