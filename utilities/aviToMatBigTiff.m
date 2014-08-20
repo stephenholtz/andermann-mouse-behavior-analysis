@@ -177,7 +177,6 @@ switch loadType
                             imwrite(frames(:,:,i),currFileName,'WriteMode','overwrite')
                         else
                             imwrite(frames(:,:,i),currFileName,'WriteMode','append')
-                            disp(i)
                         end
                         written = 1;
                         i = i + 1;
