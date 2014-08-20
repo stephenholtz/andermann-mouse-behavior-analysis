@@ -143,9 +143,7 @@ switch loadType
         takeOne3rdDim = @(x)(squeeze(x(:,:,1,:)));
         for iAvi = 1:numel(vObj)
             disp(['Started iAvi : ' num2str(iAvi)])
-            for i = 1:100
-                frames(:,:,i) = takeOne3rdDim(read(vObj(iAvi),i));
-            end
+            frames(:,:,i) = takeOne3rdDim(read(vObj(iAvi),i));
             disp(['Finished iAvi : ' num2str(iAvi)])
             [d,f,e]=fileparts(saveFileName);
             if numel(num2str(iAvi)) < 10
