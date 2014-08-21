@@ -50,7 +50,15 @@ if processFaceImages
             imagesc(faceImage);
             switch iRoi
                 case 1
-                    roi(iRoi).label = 'main';
+                    roi(iRoi).label = 'betweenEyesSquare';
+                case 2
+                    roi(iRoi).label = 'betweenEyesDownSnout';
+                case 3
+                    roi(iRoi).label = 'largeSquareAboveNose';
+                case 4
+                    roi(iRoi).label = 'ballRight';
+                case 5
+                    roi(iRoi).label = 'wiskerBase';
             end
 
             RoiH = imrect(gca);
@@ -58,6 +66,7 @@ if processFaceImages
             roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
             roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
 
+            fprintf('Select ROI %s',roi(iRoi).label)
             pause(.1)
             croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
             imagesc(croppedFace)
