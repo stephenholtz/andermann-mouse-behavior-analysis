@@ -81,11 +81,14 @@ if processFaceImages
     % Make a substack with just this ROI
     fprintf('Loading in stacks for stackRegister\n') 
     totalFrames = 0;
-    faceMotionCell = [];
+    for i = 1:nRois
+        faceMotionCell{i} = [];
+    end
     % Load one stack, calculate stackreg for all rois then load next
     for iStack = 1:numel(frameInfo)
+        clear currStack
         fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
-        currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
+        currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),1);
         for iRoi = 1:nRois
             fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
             currFaceSubStack{iRoi} = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,:);
@@ -95,8 +98,8 @@ if processFaceImages
                 refFrame{iRoi} = median(currFaceSubStack{iRoi},3);
                 roiFrame{iRoi} = currFaceSubStack{iRoi}(:,:,round(.5*size(currFaceSubStack{iRoi},3)));
             end
-            faceMotionCell{iRoi} = [faceMotionCell{iRoi} stackRegister(currFaceSubStack{iRoi},refFrame{iRoi})];
-            totalFrames = size(faceSubStack{iRoi},3) + totalFrames;
+            faceMotionCell{iRoi} = [faceMotionCell{iRoi}; stackRegister(currFaceSubStack{iRoi},refFrame{iRoi})];
+            totalFrames = size(currFaceSubStack{iRoi},3) + totalFrames;
         end
     end
     faceMotion.stackRegCell = faceMotionCell;
