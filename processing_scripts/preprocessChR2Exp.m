@@ -216,6 +216,8 @@ if processNidaqData
                                                                 stimOrder,stim.nRepeats,stimsPerBlock);
     stimTsInfo.allStructure = {'Block','Stim','Rep'};
     stimTsInfo.all = stimCell;
+    stimTsInfo.led = ledCell;
+    stimTsInfo.ptb = (exp.Data(daqCh.PTB,:) > .5);
     stimTsInfo.onsets = stimOnsets;
     stimTsInfo.inds = stimTypeInds;
     stimTsInfo.blocks = blockNumInds;
