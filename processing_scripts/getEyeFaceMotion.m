@@ -15,8 +15,8 @@
 animalName  = 'K71';
 expDateNum  = '20140815_01';
 
-nRois       = 1;
-makeNewRois = 0;
+nRois       = 4;
+makeNewRois = 1;
 
 % Get the base location for data, see function for details
 if ispc
@@ -29,69 +29,87 @@ end
 expDir  = fullfile(dataDir,animalName,expDateNum);
 % Processed data filepath
 procDir = fullfile(expDir,'proc');
-% Stacks of face tiff movies stored here (and file info in mat file)
-faceStackDir = fullfile(procDir,'faceStacks');
-load(fullfile(faceStackDir,'frameInfo.mat'));
 
-% Load in one file for drawing roi
-faceImage = imread(fullfile(faceStackDir,frameInfo(1).fileName),100);
+%------------------------------------------------------------------
+%% FACE
+%------------------------------------------------------------------
+processFaceImages = 1;
+if processFaceImages
+    % Stacks of face tiff movies stored here (and file info in mat file)
+    faceStackDir = fullfile(procDir,'faceStacks');
+    load(fullfile(faceStackDir,'frameInfo.mat'));
 
-% Find a region of interest for the snout tracking
-% Seems like slecting part of the nose helps
-if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
+    % Load in one file for drawing roi
+    faceImage = imread(fullfile(faceStackDir,frameInfo(1).fileName),100);
+
+    % Find a region of interest for the snout tracking
+    % Seems like slecting part of the nose helps
+    if makeNewRois || ~exist(fullfile(procDir,'faceROIs.mat'),'file')
+        for iRoi = 1:nRois
+            clf;
+            imagesc(faceImage);
+            switch iRoi
+                case 1
+                    roi(iRoi).label = 'main';
+            end
+
+            RoiH = imrect(gca);
+            roi(iRoi).Pos = round(getPosition(RoiH));
+            roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
+            roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
+
+            pause(.1)
+            croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
+            imagesc(croppedFace)
+        end
+        save(fullfile(procDir,'faceROIs.mat'),'roi');
+    else
+        load(fullfile(procDir,'faceROIs.mat'));
+    end
+
+    % Make a substack with just this ROI
+    fprintf('Loading in stacks for stackRegister\n') 
+    totalFrames = 0;
+
     for iRoi = 1:nRois
-        clf;
-        imagesc(faceImage);
-        switch iRoi
-            case 1
-                roi(iRoi).label = 'main';
+        fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
+        for iStack = 1:numel(frameInfo)
+            fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
+            currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
+            faceSubStack = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
+            for iFrame = 1:size(currStack,3) 
+                faceSubStack(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
+            end
+
+            % Register to the median frame stack
+            if iStack == 1
+                refFrame{iRoi} = median(faceSubStack,3);
+                roiFrame{iRoi} = faceSubStack(:,:,round(.5*size(faceSubStack,3)));
+            end
+
+            [stackRegOut,~] = stackRegister(faceSubStack,refFrame);
+            faceMotionStruct(iStack).stackReg = stackRegOut;
+            totalFrames = size(faceSubStack,3) + totalFrames;
         end
-
-        RoiH = imrect(gca);
-        roi(iRoi).Pos = round(getPosition(RoiH));
-        roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
-        roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
-
-        pause(.1)
-        croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
-        imagesc(croppedFace)
     end
-    save(fullfile(procDir,'faceROIs.mat'),'roi');
-else
-    load(fullfile(procDir,'faceROIs.mat'));
-end
 
-% Make a substack with just this ROI
-fprintf('Loading in stacks for stackRegister\n') 
-totalFrames = 0;
-for iStack = 1:numel(frameInfo)
-    fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
-    currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
-    for iRoi = nRois
-        faceSubStack = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
-        for iFrame = 1:size(currStack,3) 
-            faceSubStack(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
-        end
-        % Register to the median frame stack
-        [stackRegOut,~] = stackRegister(faceSubStack,median(faceSubStack,3));
-        %[stackRegOut,~] = stackRegister(faceSubStack,faceSubStack(:,:,1));
-        faceMotionStruct(iStack).stackReg = stackRegOut;
-        totalFrames = size(faceSubStack,3) + totalFrames;
+    stackRegOut = [];
+    for i = 1:numel(faceMotionStruct)
+        stackRegOut = [stackRegOut; faceMotionStruct(i).stackReg];
     end
-end
 
-stackRegOut = [];
-for i = 1:numel(faceMotionStruct)
-    stackRegOut = [stackRegOut; faceMotionStruct(i).stackReg];
-end
+    faceMotion.stackReg = stackRegOut;
+    faceMotion.refFrames = refFrame;
+    faceMotion.roiFrame = roiFrame;
+    faceMotion.totalFrames = totalFrames;
+    save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
 
-faceMotion.stackReg = stackRegOut;
-save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
+end
 
 %------------------------------------------------------------------
 %% EYE
 %------------------------------------------------------------------
-% Import eye image stack for processing
+% Do dialation analysis on eye
 eyeTiffPath = dir([procDir filesep 'eye_*.tiff']);
 eyeTiffPath = fullfile(procDir,eyeTiffPath(1).name);
 eyeImInfo = imfinfo(eyeTiffPath);
