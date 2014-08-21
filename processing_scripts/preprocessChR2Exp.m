@@ -34,9 +34,9 @@ experimentName  = '20140815_01';
 
 % Process only some of files (testing time)
 processEyeFiles     = 0;
-processFaceFiles    = 1;
+processFaceFiles    = 0;
 processEpiFiles     = 0;
-processNidaqData    = 0;
+processNidaqData    = 1;
 
 %% Establish base filepaths
 
@@ -178,7 +178,9 @@ if processNidaqData
     % loads in 'exp' struct
     nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
     nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
-    load(nidaqFilePath);
+    if ~exist('exp','var')
+        load(nidaqFilePath);
+    end
 
     % Retrieve camera frame numbers from daq
     % Channel names are stored in exp.daqInNames for verification
@@ -208,14 +210,16 @@ if processNidaqData
 
     % Generate structure with stimulus types and timing (other variables are for debug)
     stimsPerBlock = numel(stim.stimLocOrder);
-    [stimCell,stimInds,ledInds,blockInds] = makeStimTypeStruct(stimOnsets,ledLogic,stimOrder,stim.nRepeats,stimsPerBlock);
-
+    [stimCell,ledCell,stimTypeInds,blockNumInds] = makeStimTypeStruct( stimOnsets,stim.durOn,...
+                                                                ledLogic,stim.ledPreVisDurSecs,stim.ledPostVisDurSecs,...
+                                                                exp.daqRate,...
+                                                                stimOrder,stim.nRepeats,stimsPerBlock);
     stimTsInfo.allStructure = {'Block','Stim','Rep'};
     stimTsInfo.all = stimCell;
     stimTsInfo.onsets = stimOnsets;
-    stimTsInfo.inds = stimInds;
-    stimTsInfo.blocks = blockInds;
-    stimTsInfo.ledOn = ledLogic;
+    stimTsInfo.inds = stimTypeInds;
+    stimTsInfo.blocks = blockNumInds;
+    stimTsInfo.ledOn = ledLogic';
 
     % Save stimulus timing info
     stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);

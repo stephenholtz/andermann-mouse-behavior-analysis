@@ -1,7 +1,22 @@
+%% getEyeFaceMotion.m
+% 
+% from stackreg:
+% Rigid registration algorithm (fft of 2d xcorr?) to figure out movement
+% From stackRegister: (call will be verbose)
+%      OUTS(:,1) is correlation coefficients
+%      OUTS(:,2) is global phase difference between images 
+%               (should be zero if images real and non-negative).
+%      OUTS(:,3) is net row shift
+%      OUTS(:,4) is net column shift
+%
+% SLH 2014
+
 %% Specify animal/experiment/data location
 animalName  = 'K71';
 expDateNum  = '20140815_01';
+
 nRois       = 1;
+makeNewRois = 0;
 
 % Get the base location for data, see function for details
 dataDir = getExpDataSource('macbook');
@@ -9,67 +24,63 @@ dataDir = getExpDataSource('macbook');
 expDir  = fullfile(dataDir,animalName,expDateNum);
 % Processed data filepath
 procDir = fullfile(expDir,'proc');
+% Stacks of face tiff movies stored here (and file info in mat file)
+faceStackDir = fullfile(procDir,'faceStacks');
+load(fullfile(faceStackDir,'frameInfo.mat'));
 
-%% Import entire face image for processing
-faceTiffPath = dir([procDir filesep 'face_*.tiff']);
-faceTiffPath = fullfile(procDir,faceTiffPath(1).name);
-imInfo = imfinfo(faceTiffPath);
+% Load in one file for drawing roi
+faceImage = imread(fullfile(faceStackDir,frameInfo(1).fileName),100);
 
-testing = 1;
-if testing
-    % some real junk data
-    junkData = unidrnd(10,1777685,4);
-    faceMotion.stackReg = junkData;
-    save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
-    framesToUse = 1:floor(numel(imInfo)/4);
-else
-    framesToUse = 1:numel(imInfo);
-end
-faceImage = zeros(imInfo(1).Width,imInfo(1).Height,numel(framesToUse));
-for iFrame = framesToUse
-   faceImage(:,:,iFrame) = imread(faceTiffPath,iFrame);
-end
 % Find a region of interest for the snout tracking
 % Seems like slecting part of the nose helps
-for iRoi = 1:nRois
-    clf;
-    sampleFrame = faceImage(:,:,1);
-    imagesc(sampleFrame);
-    snout.RoiH{iRoi} = imrect(gca);
-    snout.Pos{iRoi} = round(getPosition(snout.RoiH{iRoi}));
-    snout.Xinds{iRoi} = snout.Pos{iRoi}(1):(snout.Pos{iRoi}(1)+snout.Pos{iRoi}(3)); 
-    snout.Yinds{iRoi} = snout.Pos{iRoi}(2):(snout.Pos{iRoi}(2)+snout.Pos{iRoi}(4));
+if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
+    for iRoi = 1:nRois
+        clf;
+        imagesc(faceImage);
+        switch iRoi
+            case 1
+                roi(iRoi).label = 'main';
+        end
 
-    pause(.5)
-    croppedSnout = sampleFrame(snout.Yinds{iRoi},snout.Xinds{iRoi});
-    imagesc(croppedSnout)
+        RoiH = imrect(gca);
+        roi(iRoi).Pos = round(getPosition(RoiH));
+        roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
+        roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
+
+        pause(.1)
+        croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
+        imagesc(croppedFace)
+    end
+    save(fullfile(procDir,'faceROIs.mat'),'roi');
+else
+    load(fullfile(procDir,'faceROIs.mat'));
 end
 
 % Make a substack with just this ROI
-for iRoi = nRois
-    fprintf('Finding face motion, Frame %0.10d',1)
-    faceSubStack = (zeros(numel(snout.Yinds{iRoi}),numel(snout.Xinds{iRoi}),numel(framesToUse)));
-    frameIter = 1;
-    for iFrame = framesToUse
-        if ~mod(frameIter,100)
-            fprintf('\b\b\b\b\b\b\b\b\b\b%0.10d',iFrame)
+fprintf('Loading in stacks for stackRegister\n') 
+totalFrames = 0;
+for iStack = 1:numel(frameInfo)
+    fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
+    currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
+    for iRoi = nRois
+        faceSubStack = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
+        for iFrame = 1:size(currStack,3) 
+            faceSubStack(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
         end
-        faceSubStack(:,:,frameIter) = faceImage(snout.Yinds{iRoi},snout.Xinds{iRoi},iFrame);
-        frameIter = frameIter + 1; 
-        fprintf('\n')
+        % Register to the median frame stack
+        %[stackRegOut,~] = stackRegister(faceSubStack,median(faceSubStack(:,:,1:floor(numel(framesToUse)/4))));
+        [stackRegOut,~] = stackRegister(faceSubStack,faceSubStack(:,:,1));
+        faceMotionStruct(iStack).stackReg = stackRegOut;
+        totalFrames = size(faceSubStack,3) + totalFrames;
     end
 end
 
-%% Use a rigid registration algorithm (fft of 2d xcorr?) to figure out movement
-% From stackRegister: (call will be verbose)
-%      OUTS(:,1) is correlation coefficients
-%      OUTS(:,2) is global phase difference between images 
-%               (should be zero if images real and non-negative).
-%      OUTS(:,3) is net row shift
-%      OUTS(:,4) is net column shift
-baseFrame = 10;
-[stackRegOut,~] = stackRegister(faceMotion,faceMotion(:,:,baseFrame));
-faceMotion(1).stackReg = stackRegOut;
+stackRegOut = [];
+for i = 1:numel(faceMotionStruct)
+    stackRegOut = [stackRegOut; faceMotionStruct(i).stackReg];
+end
+
+faceMotion.stackReg = stackRegOut;
 save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
 
 %------------------------------------------------------------------

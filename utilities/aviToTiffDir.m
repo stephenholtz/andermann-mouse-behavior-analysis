@@ -7,7 +7,6 @@ function aviToTiffDir(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compr
 %   tiffFileDir - dir that tiff stacks will be written to
 %   compression - use 'JPEG' or 'LZW'
 %
-%   Lots of text output, should add verbose flags.
 %   Does not have much input error checking, careful!
 %  
 % SLH 2014
