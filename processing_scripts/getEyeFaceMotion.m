@@ -60,13 +60,13 @@ if processFaceImages
                 case 5
                     roi(iRoi).label = 'wiskerBase';
             end
+            fprintf('Select ROI %s',roi(iRoi).label)
 
             RoiH = imrect(gca);
             roi(iRoi).Pos = round(getPosition(RoiH));
             roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
             roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
 
-            fprintf('Select ROI %s',roi(iRoi).label)
             pause(.1)
             croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
             imagesc(croppedFace)
