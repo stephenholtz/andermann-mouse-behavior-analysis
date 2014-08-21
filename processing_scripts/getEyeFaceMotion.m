@@ -61,7 +61,7 @@ if processFaceImages
                 case 5
                     roi(iRoi).label = 'wiskerBaseL';
                 case 6
-                    roi(iRoi).label = 'wiskerBaseL';
+                    roi(iRoi).label = 'wiskerBaseR';
 
             end
             fprintf('Select ROI %s\n',roi(iRoi).label)
@@ -72,7 +72,6 @@ if processFaceImages
 
             pause(.5)
             croppedFace = faceImage(roi(iRoi).Yinds,roi(iRoi).Xinds);
-            imagesc(croppedFace)
         end
         save(fullfile(procDir,'faceROIs.mat'),'roi');
     else
@@ -82,6 +81,7 @@ if processFaceImages
     % Make a substack with just this ROI
     fprintf('Loading in stacks for stackRegister\n') 
     totalFrames = 0;
+    faceMotionCell = [];
     % Load one stack, calculate stackreg for all rois then load next
     for iStack = 1:numel(frameInfo)
         fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
