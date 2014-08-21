@@ -34,8 +34,10 @@ epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
 nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
 nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
 
-% Load data from experiment 'exp' struct (for testing)
-load(nidaqFilePath);
+% Load data from experiment 'exp' struct
+if ~exist('exp','var')
+    load(nidaqFilePath);
+end
 
 % Load processed variables
 load(fullfile(procDir,'faceMotion.mat'));
@@ -96,7 +98,7 @@ end
 
 % LED in frames does not completely agree with daq trace
 % this slop gets rid of bad frames (almost every time?)
-bufferFrames = floor(exp.DaqRate/5);
+bufferDaqSamps = floor(exp.daqRate/5);
 
 % For each led stimulus get the precise on and offset for finding
 % proper f0 and f frames of epi image
@@ -105,8 +107,8 @@ durPrevSecs = .5;
 durPostSecs = .5;
 
 epiFrameRate = 20;
-framesPrev = durPrevSecs*epiFrameRate;
-framesPost = durPostSecs*epiFrameRate;
+dffFramesPrev = durPrevSecs*epiFrameRate;
+dffFramesPost = durPostSecs*epiFrameRate;
 
 framesPrior = [];
 framesPost = [];
@@ -123,14 +125,14 @@ for iRoi = 1:nRois
 
                 frameStimOn = frameNums.epi(stimOnsetInd);
 
-                preLedDaqInd = ledTiming(1) - bufferFrames;
-                postLedDaqInd = ledTiming(2) + bufferFrames;
+                preLedDaqInd = ledTiming(1) - bufferDaqSamps;
+                postLedDaqInd = ledTiming(2) + bufferDaqSamps;
                             
                 frameLedOn = frameNums.epi(preLedDaqInd);
                 frameLedOff = frameNums.epi(postLedDaqInd);
 
-                preLedFrames = frameLedOn-framesPrev:frameLedOn;
-                postLedFrames = frameLedOff:frameLedOff+framesPost;
+                preLedFrames = frameLedOn-dffFramesPrev:frameLedOn;
+                postLedFrames = frameLedOff:frameLedOff+dffFramesPost;
 
                 % Get the DFF on these frames
                 clear f f0
@@ -141,7 +143,7 @@ for iRoi = 1:nRois
                 end
                 f0 = f0(end-nF0Frames:end);
 
-                currDff = mean(f./median(f0(:)) - 1);
+                currDff = (f./median(f0(:)) - 1);
                 dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
 
                 clear f
@@ -155,7 +157,7 @@ for iRoi = 1:nRois
                  
                 % make a matrix on which to calculate average frame diff from stim onset
                 framesPrior = [framesPrior (frameLedOn - frameStimOn)];
-                framesPost = [framesPost (frameLedOff + frameStimOn)];
+                framesPost = [framesPost (frameStimOn - frameLedOff)];
             end
         end
     end
@@ -173,8 +175,8 @@ for iRoi = 1:nRois
     end
 
     % Means are good enough for comparison b/n led and non led stims
-    meanFramesPrior = mean(framesPrior);
-    meanFramesPost = mean(framesPost);
+    meanFramesPrior = ceil(mean(framesPrior));
+    meanFramesPost = ceil(mean(framesPost));
 
     % Fill in the rest with average offsets
     for iBlock = 1:size(stimTsInfo.led,1)
@@ -183,9 +185,9 @@ for iRoi = 1:nRois
                 stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
                 frameStimOn = frameNums.epi(stimOnsetInd);
 
-                preLedFrames = frameStimOn + meanFramesPrior;
-                postLedFrames = frameStimOn + meanFramesPost;
-
+                preLedFrames = (frameStimOn - meanFramesPrior - dffFramesPrev):(frameStimOn - meanFramesPrior);
+                postLedFrames = (frameStimOn + meanFramesPost):(frameStimOn + meanFramesPost + dffFramesPost);
+                
                 % Get the DFF on these frames
                 clear f f0
                 for i = 1:numel(preLedFrames)
@@ -195,7 +197,7 @@ for iRoi = 1:nRois
                 end
                 f0 = f0(end-nF0Frames:end);
 
-                currDff = mean(f./median(f0(:)) - 1);
+                currDff = (f./median(f0(:)) - 1);
                 dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
 
                 clear f
@@ -206,11 +208,19 @@ for iRoi = 1:nRois
 
                 currDff = f./median(f0(:)) - 1;
                 dff(iRoi).post{iBlock,iStim,iRep} = currDff;
-                
             end
         end
     end
 end
+
+% Copy over the roi in case of emergency
+for iRoi = 1:nRois
+    dff(iRoi).roi = roi(iRoi);
+end
+
+% Save the dffs so I don't need to load in the epi file every time
+fprintf('Saving epi dff in: %s\n',fullfile(procDir,'epiDff.mat'));
+save(fullfile(procDir,'epiDff.mat'),'dff');
 
 %% Plot the dffs for each stimulus
 
