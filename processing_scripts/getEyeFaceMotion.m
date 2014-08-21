@@ -68,7 +68,7 @@ if processFaceImages
             roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
 
             pause(.1)
-            croppedFace = sampleFrame(roi(iRoi).Yinds,roi(iRoi).Xinds);
+            croppedFace = faceImage(roi(iRoi).Yinds,roi(iRoi).Xinds);
             imagesc(croppedFace)
         end
         save(fullfile(procDir,'faceROIs.mat'),'roi');
