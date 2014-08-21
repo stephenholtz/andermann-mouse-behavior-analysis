@@ -13,6 +13,9 @@ animalName  = 'K71';
 expDateNum  = '20140815_01';
 
 makeNewRois = 0;
+calcNewDff = 0;
+nRois = 3;
+saveFigs = 1;
 
 % Get the base location for data, see function for details
 if ispc
@@ -27,6 +30,8 @@ expDir  = fullfile(dataDir,animalName,expDateNum);
 procDir = fullfile(expDir,'proc');
 % raw data
 rawDir = fullfile(expDir,'raw');
+% figure saving
+figDir = fullfile(expDir,'figs');
 % Epi imaging tiff path
 epiTiffPath = dir([procDir filesep 'epi_*.tiff']);
 epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
@@ -56,7 +61,6 @@ epiSampImage= double(imread(epiTiffPath,1));
 % Load in rois or make new ones
 if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
     clear roi 
-    nRois = 3;
     for iRoi = 1:nRois
         clf;
         imagesc(epiSampImage);
@@ -83,7 +87,7 @@ else
 end
 
 % Pull in the entire tiff stack if needed
-if ~exist('epi','var');
+if ~exist('epi','var') && (calcNewDff || makeNewRois)
     epi = tiffRead(epiTiffPath,epiImInfo(1).BitDepth);
 end
 
@@ -103,8 +107,8 @@ bufferDaqSamps = floor(exp.daqRate/5);
 % For each led stimulus get the precise on and offset for finding
 % proper f0 and f frames of epi image
 
-durPrevSecs = .5;
-durPostSecs = .5;
+durPrevSecs = 1;
+durPostSecs = 1;
 
 epiFrameRate = 20;
 dffFramesPrev = durPrevSecs*epiFrameRate;
@@ -113,120 +117,153 @@ dffFramesPost = durPostSecs*epiFrameRate;
 framesPrior = [];
 framesPost = [];
 
-nF0Frames = ceil(framesPrev/4);
+minPre = inf;
+minPost = inf;
+minFull = inf;
+nF0Frames = ceil(dffFramesPrev/4);
 
 % make yet another cell array with DFF values
-for iRoi = 1:nRois
-    for iBlock = 1:size(stimTsInfo.led,1)
-        for iStim = [4 5 6];
-            for iRep = 1:3
-                ledTiming = stimTsInfo.led{iBlock,iStim,iRep};
-                stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
+if calcNewDff || ~exist(fullfile(procDir,'epiDff.mat'),'file')
+    clear dff
+    for iRoi = 1:nRois
+        for iBlock = 1:size(stimTsInfo.led,1)
+            for iStim = [4 5 6];
+                for iRep = 1:3
+                    ledTiming = stimTsInfo.led{iBlock,iStim,iRep};
+                    stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
 
-                frameStimOn = frameNums.epi(stimOnsetInd);
+                    frameStimOn = frameNums.epi(stimOnsetInd);
 
-                preLedDaqInd = ledTiming(1) - bufferDaqSamps;
-                postLedDaqInd = ledTiming(2) + bufferDaqSamps;
-                            
-                frameLedOn = frameNums.epi(preLedDaqInd);
-                frameLedOff = frameNums.epi(postLedDaqInd);
+                    preLedDaqInd = ledTiming(1) - bufferDaqSamps;
+                    postLedDaqInd = ledTiming(2) + bufferDaqSamps;
+                                
+                    frameLedOn = frameNums.epi(preLedDaqInd);
+                    frameLedOff = frameNums.epi(postLedDaqInd);
 
-                preLedFrames = frameLedOn-dffFramesPrev:frameLedOn;
-                postLedFrames = frameLedOff:frameLedOff+dffFramesPost;
+                    preLedFrames = frameLedOn-dffFramesPrev:frameLedOn;
+                    postLedFrames = frameLedOff:frameLedOff+dffFramesPost;
 
-                % Get the DFF on these frames
-                clear f f0
-                for i = 1:numel(preLedFrames)
-                    currEpi = epi(:,:,i);
-                    f0(i) = median(currEpi(roi(iRoi).bw));
-                    f(i) = median(currEpi(roi(iRoi).bw));
+                    % Get the DFF on these frames
+                    clear f f0
+                    for i = 1:numel(preLedFrames)
+                        currEpi = epi(:,:,preLedFrames(i));
+                        f0(i) = median(currEpi(roi(iRoi).bw));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    f0 = f0(end-nF0Frames:end);
+                    currDff = (f./median(f0(:)) - 1);
+                    dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
+
+                    clear f
+                    for i = 1:numel(postLedFrames)
+                        currEpi = epi(:,:,postLedFrames(i));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    currDff = f./median(f0(:)) - 1;
+                    dff(iRoi).post{iBlock,iStim,iRep} = currDff;
+                    
+                    clear f
+                    allFrames = preLedFrames(1):postLedFrames(end);
+                    for i = 1:numel(allFrames)
+                        currEpi = epi(:,:,allFrames(i));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    currDff = f./median(f0(:)) - 1;
+                    dff(iRoi).full{iBlock,iStim,iRep} = currDff;
+
+                    dff(iRoi).preFrames{iBlock,iStim,iRep} = preLedFrames;
+                    dff(iRoi).postFrames{iBlock,iStim,iRep} = postLedFrames;
+                    dff(iRoi).allFrames{iBlock,iStim,iRep} = allFrames;
+                     
+                    % make a matrix on which to calculate average frame diff from stim onset
+                    framesPrior = [framesPrior (frameLedOn - frameStimOn)];
+                    framesPost = [framesPost (frameLedOff - frameStimOn)];
+
+                    
                 end
-                f0 = f0(end-nF0Frames:end);
+            end
+        end
 
-                currDff = (f./median(f0(:)) - 1);
-                dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
+        dff(iRoi).framesPrior = framesPrior;
+        dff(iRoi).framesPost = framesPost;
 
-                clear f
-                for i = 1:numel(postLedFrames)
-                    currEpi = epi(:,:,i);
-                    f(i) = median(currEpi(roi(iRoi).bw));
+        testing = 0;
+        if testing
+            figure;
+            subplot(2,1,1)
+            plot(framesPrior)
+            subplot(2,1,2)
+            plot(framesPost)
+        end
+
+        % Means are good enough for comparison b/n led and non led stims
+        meanFramesPrior = ceil(mean(framesPrior));
+        meanFramesPost = ceil(mean(framesPost));
+
+        % Fill in the rest with average offsets
+        for iBlock = 1:size(stimTsInfo.led,1)
+            for iStim = [1 2 3]
+                for iRep = 1:3
+                    stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
+                    frameStimOn = frameNums.epi(stimOnsetInd);
+
+                    preLedFrames = (frameStimOn - meanFramesPrior - dffFramesPrev):(frameStimOn - meanFramesPrior);
+                    postLedFrames = (frameStimOn + meanFramesPost):(frameStimOn + meanFramesPost + dffFramesPost);
+                    
+                    % Get the DFF on these frames
+                    clear f f0
+                    for i = 1:numel(preLedFrames)
+                        currEpi = epi(:,:,preLedFrames(i));
+                        f0(i) = median(currEpi(roi(iRoi).bw));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    f0 = f0(end-nF0Frames:end);
+                    currDff = (f./median(f0(:)) - 1);
+                    dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
+
+                    clear f
+                    for i = 1:numel(postLedFrames)
+                        currEpi = epi(:,:,postLedFrames(i));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    currDff = f./median(f0(:)) - 1;
+                    dff(iRoi).post{iBlock,iStim,iRep} = currDff;
+                    
+                    clear f
+                    allFrames = preLedFrames(1):postLedFrames(end);
+                    for i = 1:numel(allFrames)
+                        currEpi = epi(:,:,allFrames(i));
+                        f(i) = median(currEpi(roi(iRoi).bw));
+                    end
+                    currDff = f./median(f0(:)) - 1;
+                    dff(iRoi).full{iBlock,iStim,iRep} = currDff;
+
+                    dff(iRoi).preFrames{iBlock,iStim,iRep} = preLedFrames;
+                    dff(iRoi).postFrames{iBlock,iStim,iRep} = postLedFrames;
+                    dff(iRoi).allFrames{iBlock,iStim,iRep} = allFrames;
                 end
-
-                currDff = f./median(f0(:)) - 1;
-                dff(iRoi).post{iBlock,iStim,iRep} = currDff;
-                 
-                % make a matrix on which to calculate average frame diff from stim onset
-                framesPrior = [framesPrior (frameLedOn - frameStimOn)];
-                framesPost = [framesPost (frameStimOn - frameLedOff)];
             end
         end
     end
 
-    dff(iRoi).framesPrior = framesPrior;
-    dff(iRoi).framesPost = framesPost;
-
-    testing = 0;
-    if testing
-        figure;
-        subplot(2,1,1)
-        plot(framesPrior)
-        subplot(2,1,2)
-        plot(framesPost)
+    % Copy over the roi in case of emergency?
+    for iRoi = 1:nRois
+        dff(iRoi).roi = roi(iRoi);
     end
 
-    % Means are good enough for comparison b/n led and non led stims
-    meanFramesPrior = ceil(mean(framesPrior));
-    meanFramesPost = ceil(mean(framesPost));
-
-    % Fill in the rest with average offsets
-    for iBlock = 1:size(stimTsInfo.led,1)
-        for iStim = [1 2 3]
-            for iRep = 1:3
-                stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
-                frameStimOn = frameNums.epi(stimOnsetInd);
-
-                preLedFrames = (frameStimOn - meanFramesPrior - dffFramesPrev):(frameStimOn - meanFramesPrior);
-                postLedFrames = (frameStimOn + meanFramesPost):(frameStimOn + meanFramesPost + dffFramesPost);
-                
-                % Get the DFF on these frames
-                clear f f0
-                for i = 1:numel(preLedFrames)
-                    currEpi = epi(:,:,i);
-                    f0(i) = median(currEpi(roi(iRoi).bw));
-                    f(i) = median(currEpi(roi(iRoi).bw));
-                end
-                f0 = f0(end-nF0Frames:end);
-
-                currDff = (f./median(f0(:)) - 1);
-                dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
-
-                clear f
-                for i = 1:numel(postLedFrames)
-                    currEpi = epi(:,:,i);
-                    f(i) = median(currEpi(roi(iRoi).bw));
-                end
-
-                currDff = f./median(f0(:)) - 1;
-                dff(iRoi).post{iBlock,iStim,iRep} = currDff;
-            end
-        end
-    end
+    % Save the dffs so I don't need to load in the epi file every time
+    fprintf('Saving epi dff in: %s\n',fullfile(procDir,'epiDff.mat'));
+    save(fullfile(procDir,'epiDff.mat'),'dff');
+elseif ~exist('dff','var')
+    fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiDff.mat'));
+    load(fullfile(procDir,'epiDff.mat'))
 end
 
-% Copy over the roi in case of emergency
-for iRoi = 1:nRois
-    dff(iRoi).roi = roi(iRoi);
-end
-
-% Save the dffs so I don't need to load in the epi file every time
-fprintf('Saving epi dff in: %s\n',fullfile(procDir,'epiDff.mat'));
-save(fullfile(procDir,'epiDff.mat'),'dff');
-
-%% Plot the dffs for each stimulus
-
-% Determine the LED timing information first, then do the rest (start w/stimSet 6)
+%---------------------------------------------------
+%% Group the DFFs for averaging within stimulus types
+iRoi = 1;
 i = 1;
-for stimSet = [6 1:5] 
+for stimSet = 1:6 
     switch stimSet
         case 1
             stimsToUse = 1:6;
@@ -253,27 +290,21 @@ for stimSet = [6 1:5]
         for iStim = stimsToUse
             for iRep = 1:numel([stimTsInfo.all{iBlock,iStim,:}])
 
-                stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
-                % All LED conditions
-                if iStim == 6 || iStim == 4 || iStim == 5 
-                    
+                % Dff values sets to average etc.,
+                preSub = mean(dff(iRoi).pre{iBlock,iStim,iRep}(end-2:end));
+                preDff.('baselineSub').(setName)(rowIter,:) = dff(iRoi).pre{iBlock,iStim,iRep} - preSub;
+                preDff.('normal').(setName)(rowIter,:) = dff(iRoi).pre{iBlock,iStim,iRep};
+                postDff.('baselineSub').(setName)(rowIter,:) = dff(iRoi).post{iBlock,iStim,iRep} - preSub;
+                postDff.('normal').(setName)(rowIter,:) = dff(iRoi).post{iBlock,iStim,iRep};
+
+                % TODO: Make this less destructive
+                try
+                    fullDff.('baselineSub').(setName)(rowIter,:) = dff(iRoi).full{iBlock,iStim,iRep} - preSub;
+                    fullDff.('normal').(setName)(rowIter,:) = dff(iRoi).full{iBlock,iStim,iRep};
+                catch
+                    fullDff.('baselineSub').(setName)(rowIter,:) = NaN;
+                    fullDff.('normal').(setName)(rowIter,:) = NaN;
                 end
-
-                % Get the daq timeseries ind where this stimulus started (minus prestimtime)
-                startDaqInd = stimOnsetInd - preStimTimeSamps;
-                % Get the frame number of that starting daq ind
-                startFrameInd = frameNums.face(startDaqInd);
-                % Determine ending daq point
-                endDaqInd = stimOnsetInd + stimTimeSec*daqRate + postStimTimeSamps;
-                endFrameInd = frameNums.face(endDaqInd);
-
-                % Number of frames is somewhat unreliable, truncate all to same length
-                framesToUse = startFrameInd:endFrameInd;
-                framesToUse = framesToUse(1:nReliableFrames);
-                motionTs.('raw').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4);
-
-                preStimFrames = startFrameInd:startFrameInd+nReliablePreStimFrames;
-                motionTs.('baselineSub').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4) - median(faceMotion.(method)(preStimFrames,4));
 
                 rowIter = rowIter + 1;
             end
@@ -281,10 +312,130 @@ for stimSet = [6 1:5]
     end
 end
 
+%----------------------------------------------------------------------
+%% Plot the combined stimulus responses
 
-%% save raw epi ROI timeseries data (? depends on how slow)
+% Baselinesubtracted or raw traces
+%procType = 'raw';
+procType = 'baselineSub';
 
+% To plot in seconds
+indsPre = size(preDff.(procType).all,2);
+indsPost = size(postDff.(procType).all,2);
+indsFull = size(fullDff.(procType).all,2);
 
-%% Calculate the dff for each set -- and save?
+xPre = (1:indsPre)*(1/epiFrameRate);
+xGap = xPre(end) + mode(diff(xPre));
+xPost = xGap + (1:indsPost)*(1/epiFrameRate);
+xFull = (1:indsFull)*(1/epiFrameRate);
 
+xTsVector = [xPre xGap xPost];
+
+gapVal = 0;
+
+plotLumped = 1;
+if plotLumped
+    % These should be the same for all plots
+
+    yLabel = '\DeltaF/F0';
+    xLabel = 'Time (s)';
+
+    for stimSet = 1:6
+        switch stimSet
+            case 1
+                setName = 'all';
+                titleStr = ({'DFF across all stimuli', '(blank conditions included'});
+            case 2
+                setName = 'allVis';     
+                titleStr = ({'DFF across all visual stimuli', '(no blank conditions)'});
+            case 3
+                setName = 'blank';        
+                titleStr = ({'DFF across all blank stimuli', ''});
+            case 4
+                setName = 'ledOnly';
+                titleStr =({'DFF to LED Only',''});
+            case 5
+                setName = 'ledOffVis';        
+                titleStr =({'DFF to visual stimuli LED Off',''});
+            case 6
+                setName = 'ledOnVis';
+                titleStr =({'DFF to visual stimuli LED On',''});
+        end
+
+        figure();
+        dPre = preDff.(procType).(setName);
+        dGap = gapVal*ones(size(dPre,1),1); 
+        dPost = postDff.(procType).(setName);
+        dVector = [dPre, dGap, dPost];
+        plot(xTsVector,dVector);
+        hold all
+        plot([xGap xGap],ylim,'lineWidth',3,'Color','G')
+        plot(xTsVector,mean(dVector),'LineWidth',3,'Color','k');
+        ylabel(yLabel)
+        xlabel(xLabel)
+        title(titleStr)
+        if saveFigs
+            figSaveName = fullfile(figDir,['epiDff_' setName '_' animalName '_' expDateNum]);
+            export_fig(gcf,figSaveName,'-eps',gcf)
+        end 
+    end
+end
+
+%% Plot comparisons of averaged motion responses
+plotLumpedComparisons = 1;
+if plotLumpedComparisons
+    % These should be the same for all plots
+    offsetSeconds = 2;
+    yLabel = '\DeltaF/F0';
+    xLabel = 'Time (s)';
+
+    for comparisonType = 1:3
+        switch comparisonType
+            case 1
+                setName1 = 'allVis';
+                setName2 = 'blank';
+                titleStr = {'\DeltaF/F0 All visual vs blank stimuli'};
+                setLegName1 = 'All Visual Stimuli';
+                setLegName2 = 'Blank Stimuli';
+            case 2
+                setName1 = 'ledOnly';
+                setName2 = 'blank';
+                titleStr = {'\DeltaF/F0 LED vs blank stimuli'};
+                setLegName1 = 'LED Only';
+                setLegName2 = 'Blank Stimuli';
+            case 3
+                setName1 = 'ledOffVis';
+                setName2 = 'ledOnVis';
+                titleStr = {'\DeltaF/F0 with LED off vs LED on'};
+                setLegName1 = 'LED Off Vis Stim';
+                setLegName2 = 'LED On Vis Stim';
+        end
+
+        figure();
+        dPre = preDff.(procType).(setName1);
+        dGap = gapVal*ones(size(dPre,1),1); 
+        dPost = postDff.(procType).(setName1);
+        dVector = [dPre, dGap, dPost];
+        plot(xTsVector,mean(dVector));
+        hold all
+        dPre = preDff.(procType).(setName2);
+        dGap = gapVal*ones(size(dPre,1),1); 
+        dPost = postDff.(procType).(setName2);
+        dVector = [dPre, dGap, dPost];
+        plot(xTsVector,mean(dVector));
+ 
+        % Terrible hack to get correct ylim
+        plot([xGap xGap],ylim,'lineWidth',3,'Color','G')
+        plot([xGap xGap],ylim,'lineWidth',3,'Color','G')
+        ylabel(yLabel)
+        xlabel(xLabel)
+        title(titleStr)
+        lH = legend(setLegName1,setLegName2,'stimulus on/off');
+
+        if saveFigs
+            figSaveName = fullfile(figDir,['epiDff_' setName1 '_vs_' setName2 '_' animalName '_' expDateNum]);
+            export_fig(gcf,figSaveName,'-eps',gcf)
+        end
+    end
+end
 

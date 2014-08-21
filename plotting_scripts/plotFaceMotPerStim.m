@@ -144,7 +144,7 @@ if plotLumped
         title(titleStr)
         if saveFigs
             figSaveName = fullfile(figDir,[setName '_' animalName '_' expDateNum]);
-            export_fig(gcf,figSaveName,'-eps','-pdf',gcf)
+            export_fig(gcf,figSaveName,'-eps',gcf)
         end 
     end
 end
@@ -197,7 +197,7 @@ if plotLumpedComparisons
 
         if saveFigs
             figSaveName = fullfile(figDir,[setName1 '_vs_' setName2 '_' animalName '_' expDateNum]);
-            export_fig(gcf,figSaveName,'-eps','-pdf',gcf)
+            export_fig(gcf,figSaveName,'-eps',gcf)
         end
     end
 end
@@ -252,7 +252,7 @@ if plotPerStimMotDiff
     title(titleStr)
     if saveFigs
         figSaveName = fullfile(figDir,['all_stimuli_median_response_' animalName '_' expDateNum]);
-        export_fig(gcf,figSaveName,'-eps','-pdf',gcf)
+        export_fig(gcf,figSaveName,'-eps',gcf)
     end 
 end
 
