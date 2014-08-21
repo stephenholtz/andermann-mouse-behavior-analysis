@@ -15,7 +15,7 @@
 animalName  = 'K71';
 expDateNum  = '20140815_01';
 
-nRois       = 4;
+nRois       = 6;
 makeNewRois = 1;
 
 % Get the base location for data, see function for details
@@ -58,7 +58,10 @@ if processFaceImages
                 case 4
                     roi(iRoi).label = 'ballRight';
                 case 5
-                    roi(iRoi).label = 'wiskerBase';
+                    roi(iRoi).label = 'wiskerBaseL';
+                case 6
+                    roi(iRoi).label = 'wiskerBaseL';
+
             end
             fprintf('Select ROI %s',roi(iRoi).label)
 
@@ -79,26 +82,26 @@ if processFaceImages
     % Make a substack with just this ROI
     fprintf('Loading in stacks for stackRegister\n') 
     totalFrames = 0;
-
-    for iRoi = 1:nRois
-        fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
-        for iStack = 1:numel(frameInfo)
-            fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
-            currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
-            faceSubStack = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
-            for iFrame = 1:size(currStack,3) 
-                faceSubStack(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
+    for iStack = 1:numel(frameInfo)
+        fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
+        currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
+        
+        for iRoi = 1:nRois
+            fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
+            faceSubStack{iRoi} = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
+            for iFrame = 1:size(currStack,3)
+                faceSubStack{iRoi}(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
             end
-
+            
             % Register to the median frame stack
             if iStack == 1
-                refFrame{iRoi} = median(faceSubStack,3);
-                roiFrame{iRoi} = faceSubStack(:,:,round(.5*size(faceSubStack,3)));
+                refFrame{iRoi} = median(faceSubStack{iRoi},3);
+                roiFrame{iRoi} = faceSubStack{iRoi}(:,:,round(.5*size(faceSubStack{iRoi},3)));
             end
-
-            [stackRegOut,~] = stackRegister(faceSubStack,refFrame);
+            
+            [stackRegOut,~] = stackRegister(faceSubStack{iRoi},refFrame{iRoi});
             faceMotionStruct(iStack).stackReg = stackRegOut;
-            totalFrames = size(faceSubStack,3) + totalFrames;
+            totalFrames = size(faceSubStack{iRoi},3) + totalFrames;
         end
     end
 
