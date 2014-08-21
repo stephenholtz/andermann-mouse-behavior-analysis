@@ -84,7 +84,7 @@ for stimSet = 1:6
                 % Number of frames is somewhat unreliable, truncate all to same length
                 framesToUse = startFrameInd:endFrameInd;
                 framesToUse = framesToUse(1:nReliableFrames);
-                motionTs.('raw').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4);
+                motionTs.('noSub').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4);
 
                 preStimFrames = startFrameInd:startFrameInd+nReliablePreStimFrames;
                 motionTs.('baselineSub').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4) - median(faceMotion.(method)(preStimFrames,4));
@@ -99,8 +99,8 @@ end
 %% Plot the combined stimulus motion responses
 
 % Baselinesubtracted or raw traces
-%procType = 'raw';
-procType = 'baselineSub';
+procType = 'noSub';
+%procType = 'baselineSub';
 
 plotLumped = 1;
 if plotLumped
@@ -143,8 +143,8 @@ if plotLumped
         xlabel(xLabel)
         title(titleStr)
         if saveFigs
-            figSaveName = fullfile(figDir,[setName '_' animalName '_' expDateNum]);
-            export_fig(gcf,figSaveName,'-eps',gcf)
+            figSaveName = fullfile(figDir,['faceMot_' procType '_' setName '_' animalName '_' expDateNum]);
+            export_fig(gcf,figSaveName,'-pdf',gcf)
         end 
     end
 end
@@ -196,8 +196,8 @@ if plotLumpedComparisons
         lH = legend(setLegName1,setLegName2,'stimulus on/off');
 
         if saveFigs
-            figSaveName = fullfile(figDir,[setName1 '_vs_' setName2 '_' animalName '_' expDateNum]);
-            export_fig(gcf,figSaveName,'-eps',gcf)
+            figSaveName = fullfile(figDir,['faceMot_compare' procType '_' setName1 '_vs' setName2 '_' animalName '_' expDateNum]);
+            export_fig(gcf,figSaveName,'-pdf',gcf)
         end
     end
 end
@@ -251,8 +251,8 @@ if plotPerStimMotDiff
     end
     title(titleStr)
     if saveFigs
-        figSaveName = fullfile(figDir,['all_stimuli_median_response_' animalName '_' expDateNum]);
-        export_fig(gcf,figSaveName,'-eps',gcf)
+        figSaveName = fullfile(figDir,['all_stimuli_median_response_diff_' procType '_'  animalName '_' expDateNum]);
+        export_fig(gcf,figSaveName,'-pdf',gcf)
     end 
 end
 
