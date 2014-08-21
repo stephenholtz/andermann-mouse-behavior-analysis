@@ -19,7 +19,12 @@ nRois       = 1;
 makeNewRois = 0;
 
 % Get the base location for data, see function for details
-dataDir = getExpDataSource('macbook');
+if ispc
+    dataDir = getExpDataSource('atlas-pc');
+elseif ismac
+    dataDir = getExpDataSource('macbook');
+end
+
 % Experiment directory
 expDir  = fullfile(dataDir,animalName,expDateNum);
 % Processed data filepath
@@ -68,8 +73,8 @@ for iStack = 1:numel(frameInfo)
             faceSubStack(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
         end
         % Register to the median frame stack
-        %[stackRegOut,~] = stackRegister(faceSubStack,median(faceSubStack(:,:,1:floor(numel(framesToUse)/4))));
-        [stackRegOut,~] = stackRegister(faceSubStack,faceSubStack(:,:,1));
+        [stackRegOut,~] = stackRegister(faceSubStack,median(faceSubStack,3));
+        %[stackRegOut,~] = stackRegister(faceSubStack,faceSubStack(:,:,1));
         faceMotionStruct(iStack).stackReg = stackRegOut;
         totalFrames = size(faceSubStack,3) + totalFrames;
     end
