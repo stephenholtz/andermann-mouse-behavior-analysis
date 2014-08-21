@@ -48,6 +48,7 @@ if processFaceImages
         for iRoi = 1:nRois
             clf;
             imagesc(faceImage);
+            colormap(gray)
             switch iRoi
                 case 1
                     roi(iRoi).label = 'betweenEyesSquare';
@@ -63,14 +64,13 @@ if processFaceImages
                     roi(iRoi).label = 'wiskerBaseL';
 
             end
-            fprintf('Select ROI %s',roi(iRoi).label)
-
+            fprintf('Select ROI %s\n',roi(iRoi).label)
             RoiH = imrect(gca);
             roi(iRoi).Pos = round(getPosition(RoiH));
             roi(iRoi).Xinds = roi(iRoi).Pos(1):(roi(iRoi).Pos(1)+roi(iRoi).Pos(3)); 
             roi(iRoi).Yinds = roi(iRoi).Pos(2):(roi(iRoi).Pos(2)+roi(iRoi).Pos(4));
 
-            pause(.1)
+            pause(.5)
             croppedFace = faceImage(roi(iRoi).Yinds,roi(iRoi).Xinds);
             imagesc(croppedFace)
         end
@@ -82,40 +82,28 @@ if processFaceImages
     % Make a substack with just this ROI
     fprintf('Loading in stacks for stackRegister\n') 
     totalFrames = 0;
+    % Load one stack, calculate stackreg for all rois then load next
     for iStack = 1:numel(frameInfo)
         fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
         currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),8);
-        
         for iRoi = 1:nRois
             fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
-            faceSubStack{iRoi} = (zeros(numel(roi(iRoi).Yinds),numel(roi(iRoi).Xinds),size(currStack,3)));
-            for iFrame = 1:size(currStack,3)
-                faceSubStack{iRoi}(:,:,iFrame) = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,iFrame);
-            end
+            currFaceSubStack{iRoi} = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,:);
             
             % Register to the median frame stack
             if iStack == 1
-                refFrame{iRoi} = median(faceSubStack{iRoi},3);
-                roiFrame{iRoi} = faceSubStack{iRoi}(:,:,round(.5*size(faceSubStack{iRoi},3)));
+                refFrame{iRoi} = median(currFaceSubStack{iRoi},3);
+                roiFrame{iRoi} = currFaceSubStack{iRoi}(:,:,round(.5*size(currFaceSubStack{iRoi},3)));
             end
-            
-            [stackRegOut,~] = stackRegister(faceSubStack{iRoi},refFrame{iRoi});
-            faceMotionStruct(iStack).stackReg = stackRegOut;
+            faceMotionCell{iRoi} = [faceMotionCell{iRoi} stackRegister(currFaceSubStack{iRoi},refFrame{iRoi})];
             totalFrames = size(faceSubStack{iRoi},3) + totalFrames;
         end
     end
-
-    stackRegOut = [];
-    for i = 1:numel(faceMotionStruct)
-        stackRegOut = [stackRegOut; faceMotionStruct(i).stackReg];
-    end
-
-    faceMotion.stackReg = stackRegOut;
+    faceMotion.stackRegCell = faceMotionCell;
     faceMotion.refFrames = refFrame;
     faceMotion.roiFrame = roiFrame;
     faceMotion.totalFrames = totalFrames;
     save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
-
 end
 
 %------------------------------------------------------------------
