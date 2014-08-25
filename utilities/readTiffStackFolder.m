@@ -1,5 +1,4 @@
-function [stack,stackFrameNums] = readTiffFolder(folder,frameNumbers,method)
-% function [stack] = readTiffFolder(folder,frameNumbers)
+function stack = readTiffStackFolder(folderName,frameNums,castType)
 % folder: a folder with only tiff stacks in it
 % frameNumbers: the numbers of the frames w/rt the entire appended
 % set of tiffstacks desired, can span/bridge multiple stacks

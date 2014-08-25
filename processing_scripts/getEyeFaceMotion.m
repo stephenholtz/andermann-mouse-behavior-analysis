@@ -12,11 +12,10 @@
 % SLH 2014
 
 %% Specify animal/experiment/data location
-animalName  = 'K71';
-expDateNum  = '20140815_01';
-
-nRois       = 6;
-makeNewRois = 1;
+animalName      = 'K71';
+expDateNum      = '20140815_01';
+nRois           = 6;
+makeNewFaceRois = 0;
 
 % Get the base location for data, see function for details
 if ispc
@@ -33,7 +32,7 @@ procDir = fullfile(expDir,'proc');
 %------------------------------------------------------------------
 %% FACE
 %------------------------------------------------------------------
-processFaceImages = 1;
+processFaceImages = 0;
 if processFaceImages
     % Stacks of face tiff movies stored here (and file info in mat file)
     faceStackDir = fullfile(procDir,'faceStacks');
@@ -44,7 +43,7 @@ if processFaceImages
 
     % Find a region of interest for the snout tracking
     % Seems like slecting part of the nose helps
-    if makeNewRois || ~exist(fullfile(procDir,'faceROIs.mat'),'file')
+    if makeNewFaceRois || ~exist(fullfile(procDir,'faceROIs.mat'),'file')
         for iRoi = 1:nRois
             clf;
             imagesc(faceImage);
@@ -103,43 +102,56 @@ if processFaceImages
         end
     end
     faceMotion.stackRegCell = faceMotionCell;
-    faceMotion.refFrames = refFrame;
-    faceMotion.roiFrame = roiFrame;
-    faceMotion.totalFrames = totalFrames;
+    faceMotion.refFrames    = refFrame;
+    faceMotion.roiFrame     = roiFrame;
+    faceMotion.totalFrames  = totalFrames;
     save(fullfile(procDir,'faceMotion.mat'),'faceMotion','-v7.3')
 end
 
 %------------------------------------------------------------------
-%% EYE
+%% EYE Do dialation analysis on eye
 %------------------------------------------------------------------
-% Do dialation analysis on eye
-eyeTiffPath = dir([procDir filesep 'eye_*.tiff']);
-eyeTiffPath = fullfile(procDir,eyeTiffPath(1).name);
-eyeImInfo = imfinfo(eyeTiffPath);
+eyeStackDir = fullfile(procDir,'eyeStacks');
+% per stack frame information
+load(fullfile(eyeStackDir,'frameInfo.mat'))
 
-doEyeStackReg = 0;
-if doEyeStackReg
-    testing = 1;
-    if testing
-        junkData = unidrnd(10,numel(eyeImInfo),4);
-        eyeMotion.stackReg = junkData;
-        save(fullfile(procDir,'eyeMotion.mat'),'eyeMotion','-v7.3')
-        eyeFramesToUse = 1:floor(numel(eyeImInfo)/4);
-    else
-        eyeframesToUse = 1:numel(imInfo);
-    end
-    eyeImage = zeros(imInfo(1).Width,imInfo(1).Height,numel(eyeFramesToUse));
-    for iFrame = framesToUse
-       eyeImage(:,:,iFrame) = imread(eyeTiffPath,iFrame);
+doEyeSimpDilation = 1;
+if doEyeSimpDilation
+    % use the first tiffstack in the directory for testing
+    eyeStack = (tiffRead(fullfile(eyeStackDir,frameInfo(1).fileName)));
+    iH = imshow(eyeStack(:,:,100));
+
+    % Make rectangular roi and get positions
+    rH = impoly(gca);
+    pos = wait(rH);
+    mask = createMask(rH);
+
+    % For fun
+    rZ = @(X)(reshape(X,numel(X(:,:,1)),size(X,3)));
+    tM = @(X,M)(X)
+
+    roiVals = eyeStack(
+    hist(eyeStack(
+
+
+    
+    
+    % Determine reasonable threshold
+    
+    % Apply threshold to the roi
+    
+    % Get a pupil diameter proxy for each frame (of all stacks)
+    for iStack = 1:numel(frameInfo)
+        
     end
 
-    baseFrame = 330;
-    [stackRegOut,~] = stackRegister(eyeMotion,eyeMotion(:,:,baseFrame));
-    eyeMotion(1).stackReg = stackRegOut;
+    % Eliminate the eye blinks from trace, and record them in new vector
+    
+    % Change any values more than 1.5SD less than mean to nans
+
+    % Save the frame-by-frame vectors
+    eyeMotion.blinks = [];
+    eyeMotion.diameterProxy = [];
+
     save(fullfile(procDir,'eyeMotion.mat'),'eyeMotion','-v7.3')
-end
-
-doEyeBlack = 1;
-if doEyeBlack
-    save(fullfile(procDir,'eyeBlack.mat'),'eyeBlack','-v7.3')
 end

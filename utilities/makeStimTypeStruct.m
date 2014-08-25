@@ -2,6 +2,12 @@ function [stimCell,ledCell,stimTypeInds,blockNumInds] = makeStimTypeStruct( stim
                                                                             ledOn,ledPreStimDur,ledPostStimDur,...
                                                                             daqRate,...
                                                                             stimOrder,nBlockRepeats,stimsPerBlock)
+% Function that gets timing information for each stimulus, very specific and unflexible for psych toolbox experiments
+%
+% Returns:
+%   - stimCell, with stimulus onset times
+%   - ledCell, with led onset times
+%
 % Make a stimulus type, repetition, block organized output for easy indexing
 if ~exist('nBlockRepeats','var')
     nBlockRepeats = 1;
@@ -61,7 +67,7 @@ for iBlock = 1:nBlockRepeats
                 end
                 ilOn = preLedInds(ledOnInd(1));
 
-                % Detect offset
+                % Detect offset of the led
                 postLedInds = ((onsetInds(currInd)):(onsetInds(currInd)+postLedLookAround));
                 postLed = ledOn(postLedInds);
                 ledOffInd = find(diff([postLed(1) postLed])<0);
@@ -71,7 +77,6 @@ for iBlock = 1:nBlockRepeats
                     error('No LED offset found')
                 end
                 ilOff = postLedInds(ledOffInd(1)) - 1;
-
             else
                 ilOn = 0;
                 ilOff = 0;
@@ -82,4 +87,3 @@ for iBlock = 1:nBlockRepeats
         end
     end
 end
-

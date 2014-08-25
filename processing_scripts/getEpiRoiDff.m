@@ -13,9 +13,8 @@ animalName  = 'K71';
 expDateNum  = '20140815_01';
 
 makeNewRois = 0;
-calcNewDff  = 0;
-nRois       = 3;
-saveFigs    = 1;
+calcNewDff  = 1;
+nRois       = 2;
 
 % Get the base location for data, see function for details
 if ispc
@@ -68,10 +67,9 @@ if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
             case 1
                 roi(iRoi).label = 'full region';
             case 2
-                roi(iRoi).label = 'reflective';
-            case 3
-                roi(iRoi).label = 'small region';
+                roi(iRoi).label = 'extravisual corticies';
         end
+        disp(['Select ',roi(iRoi).label '...']);
         [   roi(iRoi).x,...
             roi(iRoi).y,...
             roi(iRoi).bw,...
@@ -79,8 +77,10 @@ if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
             roi(iRoi).iy    ] = roipoly(epiSampImage);
         croppedRoi = epiSampImage.*roi(iRoi).bw;
         imagesc(croppedRoi)
+        pause(.5)
     end
     % Save ROIs
+    fprintf('Saving epiROIs.mat\n')
     save(fullfile(procDir,'epiROIs.mat'),'roi','-v7.3');
 else
     load(fullfile(procDir,'epiROIs.mat'))
@@ -88,7 +88,7 @@ end
 
 % Pull in the entire tiff stack if needed
 if ~exist('epi','var') && (calcNewDff || makeNewRois)
-    epi = tiffRead(epiTiffPath,epiImInfo(1).BitDepth);
+    epi = tiffRead(epiTiffPath,'double');
 end
 
 %% Determine frames for analysis and calculate DFFs
@@ -110,9 +110,12 @@ bufferDaqSamps = ceil(0.425*exp.daqRate);
 durPrevSecs = 1;
 durPostSecs = 1;
 
-epiFrameRate = 20;
-dffFramesPrev = durPrevSecs*epiFrameRate;
-dffFramesPost = durPostSecs*epiFrameRate;
+% In some experiments frame rate wasn't calculated
+if ~isfield(exp,'epiRate')
+    exp.epiFrameRate = 20;
+end
+dffFramesPrev = durPrevSecs*exp.epiFrameRate;
+dffFramesPost = durPostSecs*exp.epiFrameRate;
 
 framesPrior = [];
 framesPost = [];
@@ -125,7 +128,7 @@ nF0Frames = ceil(dffFramesPrev/4);
 % make yet another cell array with DFF values
 if calcNewDff || ~exist(fullfile(procDir,'epiDff.mat'),'file')
     clear dff
-    for iRoi = 1:nRois
+    for iRoi = 1:numel(roi)
         for iBlock = 1:size(stimTsInfo.led,1)
             for iStim = [4 5 6];
                 for iRep = 1:3
@@ -245,7 +248,7 @@ if calcNewDff || ~exist(fullfile(procDir,'epiDff.mat'),'file')
     end
 
     % Copy over the roi in case of emergency?
-    for iRoi = 1:nRois
+    for iRoi = 1:numel(roi)
         dff(iRoi).roi = roi(iRoi);
     end
 

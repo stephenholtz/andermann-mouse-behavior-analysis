@@ -1,8 +1,8 @@
-function [stimOnsets, stimOnsetInds] = getPtbStimOnsetsFromDaq(ptbTs,daqRate,interStimIntervalSeconds)
+function [stimOnsets,stimOffsets,stimOnOff] = getPtbStimTimingFromDaq(ptbTs,daqRate,interStimIntervalSeconds)
 %function stimOnsets = getPtbStimOnsetsFromDaq(ptbTs,daqRate,interStimIntervalSeconds)
 %
-% Return visual stimulus onsets based on a minimum inter stimulus intervial.
-% complexity b/c PsychToolbox has signal every frame sent, then returns to 0
+% Return visual stimulus onsets offsets based on a minimum inter stimulus intervial.
+% complexity b/c PsychToolbox has signal every frame sent, is not continuous 
 %
 % SLH 2014
 
@@ -16,6 +16,20 @@ stimOnsetInds = onsetInds(diff([onsetInds(1), onsetInds]) > timeBnStim);
 % diff will miss the first onset, so prepend it
 stimOnsetInds = [find(frameOnsets,1,'first') stimOnsetInds];
 
-% Make other output
 stimOnsets  = zeros(numel(ptbTs),1);
 stimOnsets(stimOnsetInds) = 1;
+
+% Get offsets with fliplr
+offsetInds = [find(frameOnsets(end)) find(fliplr(frameOnsets))];
+stimOffsetInds = offsetInds(diff([offsetInds(1), offsetInds]) > timeBnStim);
+% diff will miss the first onset, so prepend it
+stimOffsetInds = [find(frameOnsets,1,'last') stimOffsetInds];
+
+stimOffsets  = zeros(numel(ptbTs),1);
+stimOffsets(stimOffsetInds) = 1;
+
+% 
+stimOnOff = zeros(numel(ptbTs),1);
+for iStim = 1:numel(stimOnsetInds) 
+    stimOnOff(stimOnsetIns(iStim):stimOffsetInds(iStim)) = 1;
+end

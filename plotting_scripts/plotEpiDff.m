@@ -27,6 +27,9 @@ epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
 % Path for nidaq data
 nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
 nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
+if ~exist('exp','var')
+    load(nidaqFilePath)
+end
 
 % Load processed variables
 load(fullfile(procDir,'faceMotion.mat'));
@@ -37,18 +40,17 @@ load(fullfile(procDir,'epiROIs.mat'))
 load(fullfile(procDir,'epiDff.mat'))
 
 % Should be calculated from daq trace...
-epiFrameRate = 20; 
-% Hand copied variables... store somewhere!
-exp.daqRate = 5000;
+if ~isfield(exp,'epiRate')
+    exp.epiFrameRate = 20;
+end
 bufferDaqSamps = ceil(0.425*exp.daqRate);
 durPrevSecs = 1;
 durPostSecs = 1;
-dffFramesPrev = durPrevSecs*epiFrameRate;
-dffFramesPost = durPostSecs*epiFrameRate;
+dffFramesPrev = durPrevSecs*exp.epiFrameRate;
+dffFramesPost = durPostSecs*exp.epiFrameRate;
 
 %---------------------------------------------------
 %% Group the DFFs for averaging within stimulus types
-
 nRois = numel(roi);
 if ~exist('preDff','var')
     for iRoi = 1:nRois
@@ -115,11 +117,11 @@ indsPre = size(preDff(iRoi).(procType).all,2);
 indsPost = size(postDff(iRoi).(procType).all,2);
 indsFull = size(fullDff(iRoi).(procType).all,2);
 
-xPre = (1:indsPre)*(1/epiFrameRate);
+xPre = (1:indsPre)*(1/exp.epiFrameRate);
 xGapOn = xPre(end) + mode(diff(xPre));
-xPost = xGapOn + (1:indsPost)*(1/epiFrameRate);
+xPost = xGapOn + (1:indsPost)*(1/exp.epiFrameRate);
 xGapOff = xPost(1) - mode(diff(xPost));
-xFull = (1:indsFull)*(1/epiFrameRate);
+xFull = (1:indsFull)*(1/exp.epiFrameRate);
 
 xTsVector = [xPre xGapOn xPost];
 
@@ -268,12 +270,12 @@ if doPlotFullTs
             % Need to figure out why lens of full are different between stimuli??
             figure();
             indsFull = size(fullDff(iRoi).(procType).(setName1),2);
-            xTsVector = (1:indsFull)*(1/epiFrameRate);
+            xTsVector = (1:indsFull)*(1/exp.epiFrameRate);
             dVector = fullDff(iRoi).(procType).(setName1);
             plot(xTsVector,nanmean(dVector));
             hold all
             indsFull = size(fullDff(iRoi).(procType).(setName2),2);
-            xTsVector = (1:indsFull)*(1/epiFrameRate);
+            xTsVector = (1:indsFull)*(1/exp.epiFrameRate);
             dVector = fullDff(iRoi).(procType).(setName2);
             plot(xTsVector,nanmean(dVector));
  

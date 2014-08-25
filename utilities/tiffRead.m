@@ -1,5 +1,18 @@
 function varargout = tiffRead(fPath, castType)
 % img = tiffLoad(fPath, [castType]); [img, scanimage] = tiffLoad(fPath);
+% 
+% Load (big)tiffs with optional scanimage support, using the matlab
+% libTiff gateway. 
+%
+% Only monochrome images supported.
+%
+% fPath - full path to tiff/tif file 
+% castType - data type for the tiff to be read in as
+% 
+% Modified with permission from the HarveyLab git repo:
+%   https://github.com/HarveyLab
+%
+% SLH 2014
 
 if ~exist('castType', 'var')
     castType = 'double';
@@ -32,13 +45,18 @@ img = zeros(t.getTag('ImageLength'), ...
     nDirectories, ...
     castType);
 
+% Read in images, formatted progress
+n = ceil(log10(nDirectories));
+prtStr = ['%' num2str(n) '.d / %' num2str(n) '.d frames loaded.'];
+fprintf(prtStr,0,nDirectories)
 for i = 1:nDirectories
     t.setDirectory(i);
-    img(:,:,i) = t.read;  
-    if ~mod(i, 200)
-        fprintf('%1.0f frames of %d loaded.\n', i, nDirectories);
+    img(:,:,i) = t.read;
+    if ~mod(i, 100)
+        fprintf([repmat('\b',1,length(prtStr)+1) prtStr], i, nDirectories);
     end
 end
+fprintf('\n')
 
 varargout{1} = img;
 
@@ -48,7 +66,8 @@ if nargout > 1
     imgDesc = t.getTag('ImageDescription');
     imgDescC = regexp(imgDesc, 'scanimage\..+? = .+?(?=\n)', 'match');
     imgDescC = strrep(imgDescC, '<nonscalar struct/object>', 'NaN');
-    if length(imgDescC)>0 %If it's a scanImage4 file
+    %If it's a scanImage4 file
+    if ~isempty(imgDescC) 
         for e = imgDescC;
             eval([e{:} ';']);
         end

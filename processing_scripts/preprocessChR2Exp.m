@@ -69,8 +69,7 @@ else
 end
 
 %% Convert all videos to tiff stacks and mat files
-
-% Convert eye tracking jpegs to Avi, then to tiff
+%% Convert eye tracking jpegs to Avi (for easier viewing) then to tiff
 eyeDir = fullfile(rawDir,'eye');
 if exist(eyeDir,'dir') && processEyeFiles
     fprintf('Starting eye file preprocessing...\n')
@@ -80,22 +79,27 @@ if exist(eyeDir,'dir') && processEyeFiles
     eyeFileNames = {eyeDirFiles(eyeFileOrder).name};
 
     eyeAviFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.avi']);
-    aviFileInfo = jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
+    %aviFileInfo = jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
 
-    % Convert avi to tiff and mat files (expects cell array)
-    compressionType = 'jpeg';
-    loadType = 'serial';
-    eyeTiffFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.tiff']);
+    eyeStackDir = fullfile(procDir,'eyeStacks');
+    if ~exist(eyeStackDir,'dir')
+        mkdir(eyeStackDir)
+    end
+
+    % These frames are already poorly compressed, might as well save them lossless
+    compression = 'lzw';
+    eyeTiffFileName = ['eye_' animalName '_' experimentName '.tiff'];
+
     [~,fN,ext] = fileparts(eyeAviFileName);
-    eyeTiffInfo = aviToMatBigTiff({[fN,ext]},procDir,eyeTiffFileName,compressionType,loadType);
-    % 41235 had issue "comma separated list has zero items"
+    aviToTiffDir({[fN,ext]},procDir,eyeTiffFileName,eyeStackDir,compression);
+
 elseif ~processEyeFiles
     fprintf('Skipping eye file preprocessing...\n')
 else
     error('eyeDir not found')
 end
 
-% Convert face tracking avi files to tiff stacks
+%% Convert face tracking avi files to tiff stacks
 faceDir = fullfile(rawDir,'face');
 if exist(faceDir,'dir') && processFaceFiles
     fprintf('Starting face file preprocessing...\n')
@@ -126,7 +130,7 @@ else
     error('faceDir not found')
 end
 
-% Convert epifluorescence avi files to tiff stacks
+%% Convert epifluorescence avi files to tiff stacks
 epiDir = fullfile(rawDir,'epi');
 if exist(epiDir,'dir') && processEpiFiles
     fprintf('Starting epi file preprocessing...\n')
@@ -163,17 +167,17 @@ if processNidaqData
     metaFilePath = fullfile(rawDir,metaFileName(1).name);
     load(metaFilePath)
 
-    % Construct stimulus order (should place in exp script in the future)
-    if isfield(stim,'stimTypeOrder')
-        stimOrder = stim.stimTypeOrder; 
-    else
-        % Numbers all conditions with unique values
-        stimOrder = zeros(numel(stim.stimLocOrder)*stim.nRepeats,1);
-        for iStim = 1:numel(stimOrder)
-            stimInd = 1+mod(iStim-1,numel(stim.stimLocOrder));
-            stimOrder(iStim) = stim.stimLocOrder(stimInd) + numel(unique(stim.stimLocOrder))*stim.ledOnOffOrder(stimInd);
-        end
-    end
+%    % Construct stimulus order (should place in exp script in the future)
+%    if isfield(stim,'stimTypeOrder')
+%        stimOrder = stim.stimTypeOrder; 
+%    else
+%        % Numbers all conditions with unique values
+%        stimOrder = zeros(numel(stim.stimLocOrder)*stim.nRepeats,1);
+%        for iStim = 1:numel(stimOrder)
+%            stimInd = 1+mod(iStim-1,numel(stim.stimLocOrder));
+%            stimOrder(iStim) = stim.stimLocOrder(stimInd) + numel(unique(stim.stimLocOrder))*stim.ledOnOffOrder(stimInd);
+%        end
+%    end
 
     % loads in 'exp' struct
     nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
@@ -189,9 +193,9 @@ if processNidaqData
     daqCh.eyeCount   = 17;
 
     fprintf('Finding frame onsets in daq data\n');
-    frameNums.face= getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe');
-    frameNums.eye= getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter');
-    frameNums.epi= getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe');
+    [frameNums.face,frameNums.faceIfi] = getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe',0);
+    [frameNums.eye,frameNums.eyeIfi]   = getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter',0);
+    [frameNums.epi,frameNums.epiIfi]   = getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe',1);
 
     % Save stimulus timing info
     frameNumsFile = fullfile(procDir,['frameNums.mat']);
@@ -203,25 +207,18 @@ if processNidaqData
     daqCh.PTB       = 2;
 
     % For easy parsing, specify inter stim interval
-    interStimInt = 0.25;
+    interStimInt = 0.5;
     fprintf('Finding stimulus onsets in daq data\n');
-    stimOnsets = getPtbStimOnsetsFromDaq(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
-    ledLogic = exp.Data(daqCh.LED,:) > 3.5;
+    [stimOnsets,stimOffsets,stimOnOff] = getPtbStimTimingFromDaq(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
+    % LED signal is very reliable, no need to clean up timing info
+    ledOnOff = exp.Data(daqCh.LED,:) > 3.5;
 
     % Generate structure with stimulus types and timing (other variables are for debug)
-    stimsPerBlock = numel(stim.stimLocOrder);
-    [stimCell,ledCell,stimTypeInds,blockNumInds] = makeStimTypeStruct( stimOnsets,stim.durOn,...
-                                                                ledLogic,stim.ledPreVisDurSecs,stim.ledPostVisDurSecs,...
-                                                                exp.daqRate,...
-                                                                stimOrder,stim.nRepeats,stimsPerBlock);
-    stimTsInfo.allStructure = {'Block','Stim','Rep'};
-    stimTsInfo.all = stimCell;
-    stimTsInfo.led = ledCell;
-    stimTsInfo.ptb = (exp.Data(daqCh.PTB,:) > .5);
-    stimTsInfo.onsets = stimOnsets;
-    stimTsInfo.inds = stimTypeInds;
-    stimTsInfo.blocks = blockNumInds;
-    stimTsInfo.ledOn = ledLogic';
+    stimStruct       = getPtbStimTsInfo(stimOnOff,ledOnOff,stim);
+    stimTsInfo.all   = stimStruct;
+    stimTsInfo.ptb   = stimOnOff;
+    stimTsInfo.inds  = stimTypeInds;
+    stimTsInfo.ledOn = ledOnOff';
 
     % Save stimulus timing info
     stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);
