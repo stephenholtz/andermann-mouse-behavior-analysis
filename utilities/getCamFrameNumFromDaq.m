@@ -1,33 +1,38 @@
-function [fN,ifi] = getFrameNumFromDaq(daqData,outputType,ignoreFirst)
-%function [frameNum,interFrameInterval] = getFrameNumFromDaq(daqData,outputType,[ignoreFirst = false])
-% Determine which points in the DAQ's timeseries correspond to camera frame numbers
+function [fN,ifi] = getCamFrameNumFromDaq(daq,output,ignoreFirst)
+%function [frameNum,interFrameInterval] = getCamFrameNumFromDaq(daqData,cameraOutputType,[ignoreFirstStrobeCluster = false])
 %
-% Takes counter data from daq and returns a frame count vector for indexing into. 
+% Determine which points in the DAQ's timeseries correspond to camera 
+% frame numbers.
+%
+% Takes counter data from daq and returns a frame count vector for 
+% indexing into. 
+%
 % Or, takes counter data and cleans it up, returning a frame count vector.
-%
-% imaqtool generates a set of strobes in the beginning and end that as far as
-% I can tell are not frames, use ignoreFirst to try to find these and not use them
-%
 % TODO: figure out what cleaning works for the eye tracking strobes
+%
+% NOTE: imaqtool generates a set of strobes in the beginning and end that as 
+% far as  I can tell are not frames, use ignoreFirst to try to find these 
+% and  not use them.
+%
 % SLH 2014
 
-% Inter frame onset interval anon
+% Anon func for inter frame onset interval
 calcIfi = @(x)(diff([0; find(diff([x(1); x(:)]))]));
 
-switch lower(outputType)
+switch lower(output)
     case {'strobe'}
-        strobeOn = [daqData(1) diff(daqData) > 0];
+        strobeOn = [daq(1) diff(daq) > 0];
         fN = cumsum(strobeOn);
         ifi = calcIfi(fN);
     case {'counter'}
-        fN = daqData;
+        fN = daq;
         ifi = calcIfi(fN);
         warning('Counter troubleshooting is not yet coded for eye tracking cameras!!')
     otherwise
         error('outputType not recognized')
 end
 
-% first frame is different
+% first frame will have different ifi
 ifi = ifi(2:end);
 
 % imaqtool generates a strobe set in the beginning that is not a frame

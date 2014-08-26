@@ -1,18 +1,18 @@
-function [stimOnsets,stimOffsets,stimOnOff] = getPtbStimTimingFromDaq(ptbTs,daqRate,interStimIntervalSeconds)
-%function [stimOnsets,stimOffsets,stimOnOff] = getPtbStimTimingFromDaq(ptbTs,daqRate,interStimIntervalSeconds)
+function [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(ptbTs,daqRate,isiSeconds)
+%function [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(PsychToolboxOutput,DaqSampleRate,interStimIntervalSeconds)
 %
 % The offset ind is the time of last frame starting, so isn't actual stimoff time (need photodiode for that)
 %
 % Return visual stimulus onsets offsets and logical based on a minimum inter stimulus intervial.
 % This has some complexity b/c PsychToolbox in this experiment setns a signal every frame sent, and is 
-% not continuous 
+% not continuous.
 %
 % SLH 2014
 
 % All voltage encoded values are >= 1
 ptbLog      = (ptbTs) > 0.5;
 frameOnsets = diff([ptbLog(1), ptbLog]) > 0;
-timeBnStim  = interStimIntervalSeconds/daqRate^-1;
+timeBnStim  = isiSeconds/daqRate^-1;
 
 onsetInds = [find(frameOnsets(1)), find(frameOnsets)];
 stimOnsetInds = onsetInds(diff([onsetInds(1), onsetInds]) > timeBnStim);
