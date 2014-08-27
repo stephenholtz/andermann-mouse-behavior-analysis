@@ -53,7 +53,7 @@ for i = 1:nDirectories
     t.setDirectory(i);
     img(:,:,i) = t.read;
     if ~mod(i, 100)
-        fprintf([repmat('\b',1,length(prtStr)+1) prtStr], i, nDirectories);
+        fprintf([repmat('\b',1,length(prtStr)+2) prtStr], i, nDirectories);
     end
 end
 fprintf('\n')

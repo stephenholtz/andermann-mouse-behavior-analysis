@@ -14,7 +14,7 @@ expDateNum  = '20140815_01';
 
 makeNewRois = 0;
 calcNewDff  = 1;
-nRois       = 2;
+nRois       = 3;
 
 % Get the base location for data, see function for details
 if ispc
@@ -35,7 +35,7 @@ figDir = fullfile(expDir,'figs');
 epiTiffPath = dir([procDir filesep 'epi_*.tiff']);
 epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
 % Path for nidaq data
-nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
+nidaqFileName = dir(fullfile(rawDir,'nidaq_*.mat'));
 nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
 
 % Load data from experiment 'exp' struct
@@ -44,218 +44,179 @@ if ~exist('exp','var')
 end
 
 % Load processed variables
-load(fullfile(procDir,'faceMotion.mat'));
 load(fullfile(procDir,'frameNums.mat'));
 load(fullfile(procDir,'stimTsInfo.mat'));
 
+%% Do / save epi analysis (ROI and DFF)
+processEpiData = 1;
+if processEpiData
+
 %% Image info / ROIs
-% Get image info command will be slow due to large file size
-if ~exist('epiImInfo','var')
-    epiImInfo = imfinfo(epiTiffPath);
-end
-
-% Load sample frame to set ROI(s)
-epiSampImage= double(imread(epiTiffPath,1));
-
-% Load in rois or make new ones
-if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
-    clear roi 
-    for iRoi = 1:nRois
-        clf;
-        imagesc(epiSampImage);
-        switch iRoi
-            case 1
-                roi(iRoi).label = 'full region';
-            case 2
-                roi(iRoi).label = 'extravisual corticies';
-        end
-        disp(['Select ',roi(iRoi).label '...']);
-        [   roi(iRoi).x,...
-            roi(iRoi).y,...
-            roi(iRoi).bw,...
-            roi(iRoi).ix,...
-            roi(iRoi).iy    ] = roipoly(epiSampImage);
-        croppedRoi = epiSampImage.*roi(iRoi).bw;
-        imagesc(croppedRoi)
-        pause(.5)
+    % Get image info command will be slow due to large file size
+    if ~exist('epiImInfo','var')
+        epiImInfo = imfinfo(epiTiffPath);
     end
-    % Save ROIs
-    fprintf('Saving epiROIs.mat\n')
-    save(fullfile(procDir,'epiROIs.mat'),'roi','-v7.3');
-else
-    load(fullfile(procDir,'epiROIs.mat'))
-end
 
-% Pull in the entire tiff stack if needed
-if ~exist('epi','var') && (calcNewDff || makeNewRois)
-    epi = tiffRead(epiTiffPath,'double');
-end
+    % Load sample frame to set ROI(s)
+    epiSampImage= double(imread(epiTiffPath,1));
+
+    % Load in rois or make new ones
+    if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
+        clear roi 
+        for iRoi = 1:nRois
+            clf;
+            imagesc(epiSampImage);
+            switch iRoi
+                case 1
+                    roi(iRoi).label = 'full region';
+                case 2
+                    roi(iRoi).label = 'extravisual corticies';
+                case 3
+                    roi(iRoi).label = 'non-gcamp region';
+            end
+            disp(['Select ',roi(iRoi).label '...']);
+            [   roi(iRoi).x,...
+                roi(iRoi).y,...
+                roi(iRoi).bw,...
+                roi(iRoi).ix,...
+                roi(iRoi).iy    ] = roipoly(epiSampImage);
+            croppedRoi = epiSampImage.*roi(iRoi).bw;
+            imagesc(croppedRoi)
+            pause(.5)
+        end
+        % Save ROIs
+        fprintf('Saving epiROIs.mat\n')
+        save(fullfile(procDir,'epiROIs.mat'),'roi','-v7.3');
+    else
+        load(fullfile(procDir,'epiROIs.mat'))
+    end
+
+    % Pull in the entire tiff stack if needed
+    if ~exist('epi','var') && (calcNewDff || makeNewRois)
+        epi = tiffRead(epiTiffPath,'double');
+    end
 
 %% Determine frames for analysis and calculate DFFs
+    % Empirically determined # of frames to throw out pre and post LED 
+    % rising edge and falling edge @20Hz, easiest method
+    nPreLedToss  = 2+1;
+    nPostLedToss = 3+1;
 
-% Plot frames in an roi
-%iFrame = 1;
-%for iFrame = 1:20
-%    imshow(epi(:,:,iFrame).*(roi(1).bw|roi(2).bw),[]);
-%    pause(.1)
-%end
+    % For analysis use this amount before and after
+    epiRate       = exp.daqRate*(1/median(frameNums.epiIfi));
+    durPrevSecs   = .5;
+    durPostSecs   = .5;
+    dffFramesPrev = ceil(durPrevSecs*epiRate);
+    dffFramesPost = ceil(durPostSecs*epiRate);
 
-% LED presence in frames does not completely agree with daq trace
-% this slop gets rid of bad frames (almost every time?)
-bufferDaqSamps = ceil(0.425*exp.daqRate);
+    [nBlocks,nStims,nReps] = size(stimTsInfo.all);
 
-% For each led stimulus get the precise on and offset for finding
-% proper f0 and f frames of epi image
+    % Calculate DFF, assume the second ROI is the background one
+    foreMask = roi(1).bw;
+    bckMask  = roi(2).bw;
+    testMask = roi(3).bw;
 
-durPrevSecs = 1;
-durPostSecs = 1;
+    % Save a little space and make troubleshooting easier with anon func
+    range2inds = @(v)(v(1):v(2));
+    ledCh = 1;
 
-% In some experiments frame rate wasn't calculated
-if ~isfield(exp,'epiRate')
-    exp.epiFrameRate = 20;
-end
-dffFramesPrev = durPrevSecs*exp.epiFrameRate;
-dffFramesPost = durPostSecs*exp.epiFrameRate;
+    % Place dff and frames used to calculate it in a struct 
+    % for easy plotting later
+    fprintf('Calculating DeltaF/F...\n')
+    if calcNewDff || ~exist(fullfile(procDir,'epiSig.mat'),'file')
+        fprintf('Block: ');
+        for iB = 1:nBlocks
+            fprintf('%2.f ',iB);
+            for iS = 1:nStims
+                for iR = 1:nReps
+                    % place safe bounds around when the LED stim is likely
+                    % contaminating the image
+                    ledDaqInds = stimTsInfo.all(iB,iS,iR).led;
+                    ledStart   = frameNums.epi(ledDaqInds(1)) - nPreLedToss;
+                    ledEnd     = frameNums.epi(ledDaqInds(2)) + nPostLedToss;
 
-framesPrior = [];
-framesPost = [];
+                    % establish analysis area around led
+                    analStart = ledStart - dffFramesPrev;
+                    analEnd   = ledEnd + dffFramesPost;
 
-minPre = inf;
-minPost = inf;
-minFull = inf;
-nF0Frames = ceil(dffFramesPrev/4);
+                    % Determine daq inds of adjusted frames
+                    daqLedStart  = find(frameNums.epi == ledStart,1,'first');
+                    daqLedEnd    = find(frameNums.epi == ledEnd,1,'last');
+                    daqAnalStart = find(frameNums.epi == analStart,1,'first');
+                    daqAnalEnd   = find(frameNums.epi == analEnd,1,'last');
 
-% make yet another cell array with DFF values
-if calcNewDff || ~exist(fullfile(procDir,'epiDff.mat'),'file')
-    clear dff
-    for iRoi = 1:numel(roi)
-        for iBlock = 1:size(stimTsInfo.led,1)
-            for iStim = [4 5 6];
-                for iRep = 1:3
-                    ledTiming = stimTsInfo.led{iBlock,iStim,iRep};
-                    stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
+                    % Which frames will be used for calculating f0
+                    epiSig(iB,iS,iR).f0Frames = [analStart (ledStart-1)];
 
-                    frameStimOn = frameNums.epi(stimOnsetInd);
+                    % Save all this for exhaustive troubleshooting
+                    epiSig(iB,iS,iR).ledFrames   = [ledStart ledEnd];
+                    epiSig(iB,iS,iR).nLedFrames  = ledEnd-ledStart+1;
+                    epiSig(iB,iS,iR).analFrames  = [analStart analEnd];
+                    epiSig(iB,iS,iR).nAnalFrames = analEnd-analStart+1;
+                    epiSig(iB,iS,iR).daqLedInds  = [daqLedStart daqLedEnd];
+                    epiSig(iB,iS,iR).daqAnalInds = [daqAnalStart daqAnalEnd];
 
-                    preLedDaqInd = ledTiming(1) - bufferDaqSamps;
-                    postLedDaqInd = ledTiming(2) + bufferDaqSamps;
-                                
-                    frameLedOn = frameNums.epi(preLedDaqInd);
-                    frameLedOff = frameNums.epi(postLedDaqInd);
+                    % The ind of the frame that everything should be aligned to is the end of the LED 
+                    epiSig(iB,iS,iR).alignmentInd = find(ledEnd==range2inds(epiSig(iB,iS,iR).analFrames));
 
-                    preLedFrames = frameLedOn-dffFramesPrev:frameLedOn;
-                    postLedFrames = frameLedOff:frameLedOff+dffFramesPost;
+                    % Calculate the f0
+                    iFrame = 1;
+                    for frame = range2inds(epiSig(iB,iS,iR).f0Frames)
+                        currEpiFrame = epi(:,:,frame);
+                        f0(iFrame) = mean(currEpiFrame(foreMask));
 
-                    % Get the DFF on these frames
-                    clear f f0
-                    for i = 1:numel(preLedFrames)
-                        currEpi = epi(:,:,preLedFrames(i));
-                        f0(i) = median(currEpi(roi(iRoi).bw));
-                        f(i) = median(currEpi(roi(iRoi).bw));
+                        iFrame = iFrame + 1;
                     end
-                    f0 = f0(end-nF0Frames:end);
-                    currDff = (f./median(f0(:)) - 1);
-                    dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
 
-                    clear f
-                    for i = 1:numel(postLedFrames)
-                        currEpi = epi(:,:,postLedFrames(i));
-                        f(i) = median(currEpi(roi(iRoi).bw));
-                    end
-                    currDff = f./median(f0(:)) - 1;
-                    dff(iRoi).post{iBlock,iStim,iRep} = currDff;
-                    
-                    clear f
-                    allFrames = preLedFrames(1):postLedFrames(end);
-                    for i = 1:numel(allFrames)
-                        currEpi = epi(:,:,allFrames(i));
-                        f(i) = median(currEpi(roi(iRoi).bw));
-                    end
-                    currDff = f./median(f0(:)) - 1;
-                    dff(iRoi).full{iBlock,iStim,iRep} = currDff;
+                    f0 = mean(f0);
+                    epiSig(iB,iS,iR).f0 = f0;
 
-                    dff(iRoi).preFrames{iBlock,iStim,iRep} = preLedFrames;
-                    dff(iRoi).postFrames{iBlock,iStim,iRep} = postLedFrames;
-                    dff(iRoi).allFrames{iBlock,iStim,iRep} = allFrames;
-                     
-                    % make a matrix on which to calculate average frame diff from stim onset
-                    framesPrior = [framesPrior (frameLedOn - frameStimOn)];
-                    framesPost = [framesPost (frameLedOff - frameStimOn)];
+                    % Calculate the dff
+                    iFrame = 1;
+                    for frame = range2inds(epiSig(iB,iS,iR).analFrames)
+                        currEpiFrame = epi(:,:,frame);
+
+                        % Calculate individual signals for testing
+                        f     = mean(currEpiFrame(foreMask));
+                        fBck  = mean(currEpiFrame(bckMask));
+                        fTest = mean(currEpiFrame(testMask));
+
+                        fSub  = f-fBck;
+                        f0Sub = f0-fBck;
+
+                        epiSig(iB,iS,iR).f0(iFrame)    = f0;
+                        epiSig(iB,iS,iR).f(iFrame)     = f;
+                        epiSig(iB,iS,iR).fBck(iFrame)  = fBck;
+                        epiSig(iB,iS,iR).fTest(iFrame) = fTest;
+                        epiSig(iB,iS,iR).fSub(iFrame)  = fSub;
+
+                        DffNoSub = (f./mean(f0(:)) - 1);
+                        Dff      = (fSub./mean(f0Sub(:)) - 1);
+
+                        % Now get the dff
+                        epiSig(iB,iS,iR).dffNoSub(iFrame) = DffNoSub;
+                        epiSig(iB,iS,iR).dff(iFrame)      = Dff;
+
+                        iFrame = iFrame + 1;
+                    end
                 end
             end
         end
 
-        dff(iRoi).framesPrior = framesPrior;
-        dff(iRoi).framesPost = framesPost;
+        % Clean up while this is still a script
+        clear daqAnal* daqLed* anal* frame iB iS iR f f0 f0Sub fBck fSub DffNoSub Dff ledDaqInds
+        clear currEpiFrame foreMask bckMask
+        fprintf(' Done\n')
 
-        testing = 0;
-        if testing
-            figure;
-            subplot(2,1,1)
-            plot(framesPrior)
-            subplot(2,1,2)
-            plot(framesPost)
-        end
+        % Save the dffs so I don't need to load in the epi file every time
+        fprintf('Saving epi dff in: %s\n',fullfile(procDir,'epiSig.mat'));
+        save(fullfile(procDir,'epiSig.mat'),'epiSig');
 
-        % Means are good enough for comparison b/n led and non led stims
-        meanFramesPrior = ceil(mean(framesPrior));
-        meanFramesPost = ceil(mean(framesPost));
-
-        % Fill in the rest with average offsets
-        for iBlock = 1:size(stimTsInfo.led,1)
-            for iStim = [1 2 3]
-                for iRep = 1:3
-                    stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
-                    frameStimOn = frameNums.epi(stimOnsetInd);
-
-                    preLedFrames = (frameStimOn - meanFramesPrior - dffFramesPrev):(frameStimOn - meanFramesPrior);
-                    postLedFrames = (frameStimOn + meanFramesPost):(frameStimOn + meanFramesPost + dffFramesPost);
-                    
-                    % Get the DFF on these frames
-                    clear f f0
-                    for i = 1:numel(preLedFrames)
-                        currEpi = epi(:,:,preLedFrames(i));
-                        f0(i) = median(currEpi(roi(iRoi).bw));
-                        f(i) = median(currEpi(roi(iRoi).bw));
-                    end
-                    f0 = f0(end-nF0Frames:end);
-                    currDff = (f./median(f0(:)) - 1);
-                    dff(iRoi).pre{iBlock,iStim,iRep} = currDff;
-
-                    clear f
-                    for i = 1:numel(postLedFrames)
-                        currEpi = epi(:,:,postLedFrames(i));
-                        f(i) = median(currEpi(roi(iRoi).bw));
-                    end
-                    currDff = f./median(f0(:)) - 1;
-                    dff(iRoi).post{iBlock,iStim,iRep} = currDff;
-                    
-                    clear f
-                    allFrames = preLedFrames(1):postLedFrames(end);
-                    for i = 1:numel(allFrames)
-                        currEpi = epi(:,:,allFrames(i));
-                        f(i) = median(currEpi(roi(iRoi).bw));
-                    end
-                    currDff = f./median(f0(:)) - 1;
-                    dff(iRoi).full{iBlock,iStim,iRep} = currDff;
-
-                    dff(iRoi).preFrames{iBlock,iStim,iRep} = preLedFrames;
-                    dff(iRoi).postFrames{iBlock,iStim,iRep} = postLedFrames;
-                    dff(iRoi).allFrames{iBlock,iStim,iRep} = allFrames;
-                end
-            end
-        end
+    elseif ~exist('dff','var')
+        % Load in if reqd
+        fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiSig.mat'));
+        load(fullfile(procDir,'epiSig.mat'))
     end
-
-    % Copy over the roi in case of emergency?
-    for iRoi = 1:numel(roi)
-        dff(iRoi).roi = roi(iRoi);
-    end
-
-    % Save the dffs so I don't need to load in the epi file every time
-    fprintf('Saving epi dff in: %s\n',fullfile(procDir,'epiDff.mat'));
-    save(fullfile(procDir,'epiDff.mat'),'dff');
-elseif ~exist('dff','var')
-    fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiDff.mat'));
-    load(fullfile(procDir,'epiDff.mat'))
 end
+
+

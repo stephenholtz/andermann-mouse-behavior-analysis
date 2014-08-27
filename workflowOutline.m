@@ -27,11 +27,15 @@ preprocessChR2Exp;
 %   Also, calculate DF/F for ROIs on epi images during each stimulus
 %   repitition etc.,
    
-% Script for 'data' processing
-processChR2ExpData;
+% Script for setting epi ROIs and calculating their DFFs processing
+procEpiRoiDff;
+% Script for setting face tracking ROI and calculating motion
+procEyeFaceMotion;
 
 %% Analysis/plotting
 %   Rough analysis and plotting scripts, using processed data
+plotEpiDff;
+plotFaceMotPerStim;
 
 % Scripts to plot per stimulus motion / DFF / eye dilation
 
@@ -39,3 +43,4 @@ processChR2ExpData;
 %% Monkeylogic experiments
 %------------------------------------------------------------------
 
+% TBD, organized

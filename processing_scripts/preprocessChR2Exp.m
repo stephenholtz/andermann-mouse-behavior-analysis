@@ -35,8 +35,8 @@ experimentName  = '20140815_01';
 % Process only some of files (testing time)
 processEyeFiles     = 0;
 processFaceFiles    = 0;
-processEpiFiles     = 0;
-processNidaqData    = 1;
+processEpiFiles     = 1;
+processNidaqData    = 0;
 
 %% Establish base filepaths
 
@@ -116,11 +116,6 @@ if exist(faceDir,'dir') && processFaceFiles
         mkdir(faceStackDir)
     end
 
-    %%Load types: allAtOnce,byMovie,byMovieParFor, or serial
-    %loadType = 'writeFolder';
-    %faceTiffFileName = fullfile(faceStackDir,['face_' animalName '_' experimentName '.tiff']);
-    %faceTiffInfo = aviToMatBigTiff(faceFileNames,faceDir,faceTiffFileName,compression,loadType);
-
     faceTiffName = [animalName '_' experimentName '.tiff'];
     aviToTiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression);
 
@@ -138,20 +133,14 @@ if exist(epiDir,'dir') && processEpiFiles
     epiDirFiles = dir([epiDir filesep 'epi*.avi']);
     epiFileNames = {epiDirFiles(1).name};
 
-    % Convert avi to tiff and mat files
-    loader = 1;
-    switch loader
-        case 1
-            compressionType = 'lzw';
-            loadType = 'serial';
-            epiTiffFileName = fullfile(procDir,['epi_' animalName '_' experimentName '.tiff']);
-            epiTiffInfo = aviToMatBigTiff(epiFileNames,epiDir,epiTiffFileName,compressionType,loadType);
-        case 2
-            error('finish')
-            compression = 'lzw';
-            faceTiffName = ['epi_' animalName '_' experimentName '.tiff'];
-            aviToTiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression);
+    epiStackDir = fullfile(procDir,'epiStacks');
+    if ~exist(epiStackDir,'dir')
+        mkdir(epiStackDir)
     end
+
+    compression = 'lzw';
+    epiTiffName = ['epi_' animalName '_' experimentName '.tiff'];
+    aviToTiffDir(epiFileNames,epiDir,epiTiffName,epiStackDir,compression);
 elseif ~processEpiFiles
     fprintf('Skipping epi files preprocessing...\n')
 else
@@ -167,19 +156,7 @@ if processNidaqData
     metaFilePath = fullfile(rawDir,metaFileName(1).name);
     load(metaFilePath)
 
-%    % Construct stimulus order (should place in exp script in the future)
-%    if isfield(stim,'stimTypeOrder')
-%        stimOrder = stim.stimTypeOrder; 
-%    else
-%        % Numbers all conditions with unique values
-%        stimOrder = zeros(numel(stim.stimLocOrder)*stim.nRepeats,1);
-%        for iStim = 1:numel(stimOrder)
-%            stimInd = 1+mod(iStim-1,numel(stim.stimLocOrder));
-%            stimOrder(iStim) = stim.stimLocOrder(stimInd) + numel(unique(stim.stimLocOrder))*stim.ledOnOffOrder(stimInd);
-%        end
-%    end
-
-    % loads in 'exp' struct
+    % loads in poorly named 'exp' struct
     nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
     nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
     if ~exist('exp','var')
@@ -193,9 +170,9 @@ if processNidaqData
     daqCh.eyeCount   = 17;
 
     fprintf('Finding frame onsets in daq data\n');
-    [frameNums.face,frameNums.faceIfi] = getFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe',0);
-    [frameNums.eye,frameNums.eyeIfi]   = getFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter',0);
-    [frameNums.epi,frameNums.epiIfi]   = getFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe',1);
+    [frameNums.face,frameNums.faceIfi] = getCamFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe',0);
+    [frameNums.eye,frameNums.eyeIfi]   = getCamFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter',0);
+    [frameNums.epi,frameNums.epiIfi]   = getCamFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe',1);
 
     % Save stimulus timing info
     frameNumsFile = fullfile(procDir,['frameNums.mat']);
@@ -209,16 +186,15 @@ if processNidaqData
     % For easy parsing, specify inter stim interval
     interStimInt = 0.5;
     fprintf('Finding stimulus onsets in daq data\n');
-    [stimOnsets,stimOffsets,stimOnOff] = getPtbStimTimingFromDaq(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
+    [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
     % LED signal is very reliable, no need to clean up timing info
     ledOnOff = exp.Data(daqCh.LED,:) > 3.5;
 
-    % Generate structure with stimulus types and timing (other variables are for debug)
+    % Generate structure with stimulus types and timing (+ other variables for debug)
     stimStruct       = getPtbStimTsInfo(stimOnOff,ledOnOff,stim);
     stimTsInfo.all   = stimStruct;
-    stimTsInfo.ptb   = stimOnOff;
-    stimTsInfo.inds  = stimTypeInds;
-    stimTsInfo.ledOn = ledOnOff';
+    stimTsInfo.ptb   = 0+stimOnOff(:);
+    stimTsInfo.ledOn = 0+ledOnOff(:);
 
     % Save stimulus timing info
     stimulusIndsInfoFile = fullfile(procDir,['stimTsInfo.mat']);
@@ -228,3 +204,4 @@ else
 end
 
 tElapsed = toc(ticH);
+fprintf('Time elapsed: %2.2f seconds\n',tElapsed/60)

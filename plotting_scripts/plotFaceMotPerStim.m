@@ -8,39 +8,52 @@
 animalName  = 'K71';
 expDateNum  = '20140815_01';
 saveFigs    = 1;
-% Get the base location for data
-dataDir = getExpDataSource('macbook');
+
+% Get the base location for data, see function for details
+if ispc
+    dataDir = getExpDataSource('atlas-pc');
+elseif ismac
+    dataDir = getExpDataSource('macbook');
+end
+
 % Experiment directory
 expDir  = fullfile(dataDir,animalName,expDateNum);
 % Processed data filepath
-rawDir = fullfile(expDir,'raw');
 procDir = fullfile(expDir,'proc');
+% raw data
+rawDir = fullfile(expDir,'raw');
+% figure saving
 figDir = fullfile(expDir,'figs');
+% Epi imaging tiff path
+epiTiffPath = dir([procDir filesep 'epi_*.tiff']);
+epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
+% Path for nidaq data
+nidaqFileName = dir(fullfile(rawDir,'nidaq_*.mat'));
+nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
+% Load data from experiment 'exp' struct
+if ~exist('exp','var')
+    load(nidaqFilePath);
+end
 
-%% Load variables
-% Stimulus metadata
-stimMetaFile = dir(fullfile(rawDir,'stimulus_*.mat'));
-load(fullfile(rawDir,stimMetaFile(1).name));
-% entire daq timeseries
-daqFile = dir(fullfile(rawDir,'nidaq_*.mat'));
-%load(fullfile(rawDir,daqFile(1).name));
-
-% Processed variables
+% Load processed variables
 load(fullfile(procDir,'faceMotion.mat'));
 load(fullfile(procDir,'frameNums.mat'));
 load(fullfile(procDir,'stimTsInfo.mat'));
 
 % loop over data to make a large matrix
 % This part is simple because we want the time from stimulus onset to offset
-method          = 'stackReg';
-camFrameRate    = 70;
-daqRate         = 5000;
-stimTimeSec     = stim.durOn;
-preStimTimeSec  = 1;
-preStimTimeSamps= daqRate*preStimTimeSec;
-postStimTimeSec = 1;
-postStimTimeSamps= daqRate*postStimTimeSec;
-nReliableFrames = camFrameRate*(preStimTimeSec+postStimTimeSec+stimTimeSec) - 10;
+epiRate       = exp.daqRate*(1/median(frameNums.epiIfi));
+faceRate      = exp.daqRate*(1/median(frameNums.face));
+daqRate       = 5000;
+durPrevSecs   = .5;
+durPostSecs   = .5;
+
+stimTimeSec            = stim.durOn;
+preStimTimeSec         = 1;
+preStimTimeSamps       = daqRate*preStimTimeSec;
+postStimTimeSec        = 1;
+postStimTimeSamps      = daqRate*postStimTimeSec;
+nReliableFrames        = camFrameRate*(preStimTimeSec+postStimTimeSec+stimTimeSec) - 10;
 nReliablePreStimFrames = camFrameRate*(preStimTimeSec) - 10;
 
 %----------------------------------------------------------------------
