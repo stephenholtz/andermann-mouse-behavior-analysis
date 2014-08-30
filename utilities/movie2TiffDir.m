@@ -1,10 +1,10 @@
-function aviToTiffDir(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compression)
-%%function tiffInfo = aviToTiffFolder(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compression)
+function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression)
+%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression)
 %  
-%   aviFileNames - cell array of filenames for all avi files
-%   aviFileDir - directory where avi file(s) are located
-%   tiffFileBaseName - base name that will be prepended
-%   tiffFileDir - dir that tiff stacks will be written to
+%   inFiles - cell array of filenames for all movie files
+%   inDir - directory where movie file(s) are located
+%   tiffName - base name that will be prepended
+%   tiffDir - dir that tiff stacks will be written to
 %   compression - use 'JPEG' or 'LZW'
 %
 %   Does not have much input error checking, careful!
@@ -13,15 +13,22 @@ function aviToTiffDir(aviFileNames,aviFileDir,tiffFileBaseName,tiffFileDir,compr
 %#ok<*NBRAK,*UNRCH,*AGROW>
 verbose = 1;
 if verbose
-    fprintf('\nConverting AVI files to tiff stacks!\n');
+    fprintf('\nConverting movie files to tiff stacks!\n');
 end
 
 %% Create AVI objects
 if verbose
     fprintf('Creating VideoReader objects\n');
 end
-for i = 1:numel(aviFileNames)
-    vObj(i) = VideoReader(fullfile(aviFileDir,aviFileNames{i}));
+
+if ~iscell(inFiles) && ischar(inFiles)
+    inFiles = {inFiles};
+elseif ~iscell(inFiles)
+    error('Expects cell array or characters for inFiles');
+end
+
+fo i = 1:numel(inFiles)
+    vObj(i) = VideoReader(fullfile(inDir,inFiles{i}));
     [~] = read(vObj(i),inf);
     nFrames(i) = vObj(i).NumberOfFrames;
 end
@@ -31,20 +38,25 @@ nRows = vObj(1).Height;
 nCols = vObj(1).Width;
 
 % Limited videoformat options for our data:
+% flag take3rdDim is a more efficient version of rgb2gray
 switch vObj(1).VideoFormat
     case {'RGB24'}
         % This is UINT8x3 off the pointgrey camera
         BitsPerPixel= 8;
         take3rdDim = 1;
+    case {'Mono16'}
+        % probably a motion jpeg 2000 file
+        BitsPerPixel = vObj(1).BitsPerPixel;
+        take3rdDim = 0;
     case {'Grayscale'}
-        % This is from the epi camera
+        % AKA default grayscale AVI from the epi camera
         BitsPerPixel = vObj(1).BitsPerPixel;
         take3rdDim = 0;
     otherwise
         error('VideoFormat not accounted for')
 end
 
-% Write stacks from the AVIs to a folder, with a frameInfo.mat file for lookup
+% Write stacks from the movies to a folder, with a frameInfo.mat file for lookup
 nPerStack   = 1000;
 totalFrames = sum(nFrames);
 framesLeft  = 1:totalFrames;
@@ -81,27 +93,27 @@ while ~isempty(framesLeft)
         lastFrame =['0' lastFrame];
     end
 
-    frameInfo(iStack).fileName = [prepend '_s' firstFrame '_e' lastFrame '_' tiffFileBaseName];
+    frameInfo(iStack).fileName = [prepend '_s' firstFrame '_e' lastFrame '_' tiffName];
     frameInfo(iStack).stackNum = iStack;
     frameInfo(iStack).frameNums = currFrames;
     frameInfo(iStack).nTotalFrames = totalFrames;
 
-    % Store the names of the avis that the frames came from
-    aviUsed = zeros(numel(currFrames),1);
+    % Store the names of the movies that the frames came from
+    movieUsed = zeros(numel(currFrames),1);
     iter = 1;
     for iFrame = currFrames
-        aviUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
+        movieUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
         iter = iter + 1;
     end 
-    frameInfo(iStack).fileSource = aviFileNames(unique(aviUsed));
+    frameInfo(iStack).fileSource = inFiles(unique(movieUsed));
 
-    % Store the inds of the avis that the frames came from (clunky)
+    % Store the inds of the movies that the frames came from (clunky)
     for i = 1:numel(frameInfo(iStack).fileSource)
         frameIter = 1;
         for iFrame = currFrames 
-            aviUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
-            aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
-            frameInfo(iStack).aviFrameNum{i}(frameIter) = aviFrame;
+            movieUsed(iter) = find(cumsum(nFrames) >= iFrame, 1, 'first');
+            movFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+            frameInfo(iStack).movFrameNum{i}(frameIter) = movFrame;
             frameIter = frameIter + 1;
         end
     end
@@ -115,10 +127,14 @@ while ~isempty(framesLeft)
     iStack = iStack + 1;
 end 
 
+if ~exist(tiffDir,'dir')
+    mkdir(tiffDir)
+end
+
 % Save the frameInfo.mat file for later use (reduntant with filenames)
-save(fullfile(tiffFileDir,'frameInfo.mat'),'frameInfo','-v7.3')
+save(fullfile(tiffDir,'frameInfo.mat'),'frameInfo','-v7.3')
 if verbose
-    fprintf('Saved: %s\n',fullfile(tiffFileDir,'frameInfo.mat'))
+    fprintf('Saved: %s\n',fullfile(tiffDir,'frameInfo.mat'))
 end
 
 % Anon func for grabbing that is faster than RGB conversion
@@ -136,23 +152,23 @@ for iStack = stacksToWrite
 
     % Print output
     if verbose; 
-        fprintf('\nAVI loading for stack %d / %d',iStack,numel(stacksToWrite));
-        fprintf('\n\tAVI frame %8.d / %8.d',frameIter,numel(framesInStack));
+        fprintf('\nMovie loading for stack %d / %d',iStack,numel(stacksToWrite));
+        fprintf('\n\tMovie frame %8.d / %8.d',frameIter,numel(framesInStack));
     end
 
     for iFrame = framesInStack
         if verbose && ~mod(frameIter,ceil(nPerStack/10));
-            fprintf([repmat('\b',1,29) 'AVI frame %8.d / %8.d'],frameIter,numel(framesInStack));
+            fprintf([repmat('\b',1,31) 'Movie frame %8.d / %8.d'],frameIter,numel(framesInStack));
         end
 
-        % Look up which avi object should be used
-        iAvi = find(cumsum(nFrames) >= iFrame, 1, 'first');
-        aviFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
+        % Look up which movie object should be used
+        iMov = find(cumsum(nFrames) >= iFrame, 1, 'first');
+        movFrame = iFrame - sum(nFrames(cumsum(nFrames) < iFrame));
 
         if take3rdDim
-            rawFrames(:,:,frameIter) = takeOne3rdDim(read(vObj(iAvi),aviFrame));        
+            rawFrames(:,:,frameIter) = takeOne3rdDim(read(vObj(iMov),movFrame));        
         else
-            rawFrames(:,:,frameIter) = (read(vObj(iAvi),aviFrame));        
+            rawFrames(:,:,frameIter) = (read(vObj(iMov),movFrame));        
         end
         frameIter = frameIter + 1;
     end
@@ -167,5 +183,5 @@ for iStack = stacksToWrite
     option.Compression = compression;
     option.BigTiff = true;
 
-    tiffWrite(rawFrames,frameInfo(iStack).fileName,tiffFileDir,option)
+    tiffWrite(rawFrames,frameInfo(iStack).fileName,tiffDir,option)
 end

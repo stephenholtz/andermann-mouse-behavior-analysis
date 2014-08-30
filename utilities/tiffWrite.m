@@ -78,10 +78,13 @@ end
 switch option.BitsPerSample
     case 8
         img = uint8(img);
-    case 16
+        bitsPerSample = 8;
+    case {16,14,12}
         img = uint16(img);
+        bitsPerSample = 16;
     case 32
         img = uint32(img);
+        bitsPerSample = 32;
     otherwise
         error('Unsupported bit depth.');
 end
@@ -106,7 +109,7 @@ end
 tagStruct.ImageLength = h;
 tagStruct.ImageWidth = w;
 tagStruct.Photometric = Tiff.Photometric.MinIsBlack;
-tagStruct.BitsPerSample = option.BitsPerSample;
+tagStruct.BitsPerSample = bitsPerSample;
 tagStruct.SamplesPerPixel = 1;
 tagStruct.Compression = option.Compression;
 tagStruct.Software = ['MATLAB:' mfilename];
