@@ -108,6 +108,9 @@ if exist(faceDir,'dir') && processFaceFiles
     [~,faceFileOrder]= sort([faceDirFiles(:).datenum]);
     faceFileNames = {faceDirFiles(faceFileOrder).name};
 
+    % Get the number of frames in the movies for error checking
+    movFrames = getNumMovFrames(faceFileNames,faceDir);
+    
     % Convert avi to tiff and mat files (expects cell array)
     compression = 'jpeg';
 
@@ -159,20 +162,20 @@ if processNidaqData
     % loads in poorly named 'exp' struct
     nidaqFileName = dir(fullfile(rawDir,['nidaq_*.mat']));
     nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
-    if ~exist('exp','var')
+    if ~exist('daq','var')
         load(nidaqFilePath);
     end
 
     % Retrieve camera frame numbers from daq
-    % Channel names are stored in exp.daqInNames for verification
+    % Channel names are stored in daq.daqInNames for verification
     daqCh.epiStrobe  = 8;
     daqCh.faceStrobe = 9;
     daqCh.eyeCount   = 17;
 
     fprintf('Finding frame onsets in daq data\n');
-    [frameNums.face,frameNums.faceIfi] = getCamFrameNumFromDaq(exp.Data(daqCh.faceStrobe,:),'strobe',0);
-    [frameNums.eye,frameNums.eyeIfi]   = getCamFrameNumFromDaq(exp.Data(daqCh.eyeCount,:),'counter',0);
-    [frameNums.epi,frameNums.epiIfi]   = getCamFrameNumFromDaq(exp.Data(daqCh.epiStrobe,:),'strobe',1);
+    [frameNums.face,frameNums.faceIfi] = getCamFrameNumFromDaq(daq.Data(daqCh.faceStrobe,:),'strobe',0);
+    [frameNums.eye,frameNums.eyeIfi]   = getCamFrameNumFromDaq(daq.Data(daqCh.eyeCount,:),'counter',0);
+    [frameNums.epi,frameNums.epiIfi]   = getCamFrameNumFromDaq(daq.Data(daqCh.epiStrobe,:),'strobe',1);
 
     % Save stimulus timing info
     frameNumsFile = fullfile(procDir,['frameNums.mat']);
@@ -186,9 +189,9 @@ if processNidaqData
     % For easy parsing, specify inter stim interval
     interStimInt = 0.5;
     fprintf('Finding stimulus onsets in daq data\n');
-    [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(exp.Data(daqCh.PTB,:),exp.daqRate,interStimInt);
+    [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(daq.Data(daqCh.PTB,:),daq.daqRate,interStimInt);
     % LED signal is very reliable, no need to clean up timing info
-    ledOnOff = exp.Data(daqCh.LED,:) > 3.5;
+    ledOnOff = daq.Data(daqCh.LED,:) > 3.5;
 
     % Generate structure with stimulus types and timing (+ other variables for debug)
     stimStruct       = getPtbStimTsInfo(stimOnOff,ledOnOff,stim);
