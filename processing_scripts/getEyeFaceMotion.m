@@ -12,8 +12,8 @@
 % SLH 2014
 
 %% Specify animal/experiment/data location
-animalName      = 'K71';
-expDateNum      = '20140815_01';
+animalName      = 'K51';
+expDateNum      = '20140830_02';
 nRois           = 6;
 makeNewFaceRois = 0;
 
@@ -32,7 +32,7 @@ procDir = fullfile(expDir,'proc');
 %------------------------------------------------------------------
 %% FACE
 %------------------------------------------------------------------
-processFaceImages = 0;
+processFaceImages = 1;
 if processFaceImages
     % Stacks of face tiff movies stored here (and file info in mat file)
     faceStackDir = fullfile(procDir,'faceStacks');
@@ -111,11 +111,14 @@ end
 %------------------------------------------------------------------
 %% EYE Do dialation analysis on eye
 %------------------------------------------------------------------
+
+%TODO: FINISH!
+
 eyeStackDir = fullfile(procDir,'eyeStacks');
 % per stack frame information
 load(fullfile(eyeStackDir,'frameInfo.mat'))
 
-doEyeSimpDilation = 1;
+doEyeSimpDilation = 0;
 if doEyeSimpDilation
     % use the first tiffstack in the directory for testing
     eyeStack = (tiffRead(fullfile(eyeStackDir,frameInfo(1).fileName)));
@@ -128,13 +131,10 @@ if doEyeSimpDilation
 
     % For fun
     rZ = @(X)(reshape(X,numel(X(:,:,1)),size(X,3)));
-    tM = @(X,M)(X)
+    tM = @(X,M)(X);
 
-    roiVals = eyeStack(
-    hist(eyeStack(
-
-
-    
+    roiVals = eyeStack();
+    hist(eyeStack());
     
     % Determine reasonable threshold
     
