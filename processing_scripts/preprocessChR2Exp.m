@@ -30,11 +30,11 @@ ticH = tic;
 
 %% Set Animal/Experiment Specific information
 animalName      = 'K51';
-experimentName  = '20140830_01';
+experimentName  = '20140830_02';
 
 % Process only some of files
-processEyeFiles     = 1;
-processFaceFiles    = 1;
+processEyeFiles     = 0;
+processFaceFiles    = 0;
 processEpiFiles     = 1;
 processNidaqData    = 1;
 
@@ -78,9 +78,12 @@ if exist(eyeDir,'dir') && processEyeFiles
     [~,eyeFileOrder]= sort([eyeDirFiles(:).datenum]);
     eyeFileNames = {eyeDirFiles(eyeFileOrder).name};
 
+    % Only make the avi file if needed
     eyeAviFileName = fullfile(procDir,['eye_' animalName '_' experimentName '.avi']);
-    aviFileInfo = jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
-
+    if ~exist(eyeAviFileName,'file')
+        jpegsToAvi(eyeFileNames,eyeDir,eyeAviFileName);
+    end
+    
     eyeStackDir = fullfile(procDir,'eyeStacks');
     if ~exist(eyeStackDir,'dir')
         mkdir(eyeStackDir)
@@ -176,7 +179,12 @@ if processNidaqData
     [frameNums.face,frameNums.faceIfi] = getCamFrameNumFromDaq(daq.Data(daqCh.faceStrobe,:),'strobe',0);
     [frameNums.eye,frameNums.eyeIfi]   = getCamFrameNumFromDaq(daq.Data(daqCh.eyeCount,:),'counter',0);
     [frameNums.epi,frameNums.epiIfi]   = getCamFrameNumFromDaq(daq.Data(daqCh.epiStrobe,:),'strobe',1);
-
+    
+    % Save the frame rate
+    frameNums.faceRate = (median(frameNums.faceIfi) / daq.daqRate);
+    frameNums.eyeRate = (median(frameNums.eyeIfi) / daq.daqRate);
+    frameNums.epiRate = (median(frameNums.epiIfi) / daq.daqRate);
+    
     % Save stimulus timing info
     frameNumsFile = fullfile(procDir,['frameNums.mat']);
     save(frameNumsFile,'frameNums','-v7.3');

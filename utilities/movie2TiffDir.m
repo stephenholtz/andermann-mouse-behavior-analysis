@@ -27,7 +27,7 @@ elseif ~iscell(inFiles)
     error('Expects cell array or characters for inFiles');
 end
 
-fo i = 1:numel(inFiles)
+for i = 1:numel(inFiles)
     vObj(i) = VideoReader(fullfile(inDir,inFiles{i}));
     [~] = read(vObj(i),inf);
     nFrames(i) = vObj(i).NumberOfFrames;
@@ -44,9 +44,9 @@ switch vObj(1).VideoFormat
         % This is UINT8x3 off the pointgrey camera
         BitsPerPixel= 8;
         take3rdDim = 1;
-    case {'Mono16'}
+    case {'Mono16','Mono14','Mono12'}
         % probably a motion jpeg 2000 file
-        BitsPerPixel = vObj(1).BitsPerPixel;
+        BitsPerPixel = 16;
         take3rdDim = 0;
     case {'Grayscale'}
         % AKA default grayscale AVI from the epi camera
