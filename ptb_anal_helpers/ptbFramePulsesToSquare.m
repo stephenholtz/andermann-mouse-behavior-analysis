@@ -23,6 +23,11 @@ stimOnsetInds = [find(frameOnsets,1,'first') stimOnsetInds];
 stimOnsets  = zeros(numel(ptbTs),1);
 stimOnsets(stimOnsetInds) = 1;
 
+% Flip isn't a builtin on the server version... glorious anon below
+if ~exist('flip','builtin')
+    flip = @(X)(reshape(flipud(X(:)),size(X,1),size(X,2)));
+end
+
 % Get offsets with flip applied at beginning and end
 frameOffsets = diff([ptbLog(end), flip(ptbLog)]) > 0;
 offsetInds = [find(frameOffsets(1)) find(frameOffsets)];

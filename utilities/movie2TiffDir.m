@@ -1,5 +1,5 @@
-function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression)
-%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression)
+function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression,useBigTiff)
+%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,[compression='LZW'],[useBigTiff=false])
 %  
 %   inFiles - cell array of filenames for all movie files
 %   inDir - directory where movie file(s) are located
@@ -20,7 +20,12 @@ end
 if verbose
     fprintf('Creating VideoReader objects\n');
 end
-
+if ~exist('compression','var')
+    compression = 'LZW';
+end
+if ~exist('useBigTiff','var')
+    useBigTiff = false;
+end
 if ~iscell(inFiles) && ischar(inFiles)
     inFiles = {inFiles};
 elseif ~iscell(inFiles)
@@ -148,8 +153,15 @@ for iStack = stacksToWrite
 
     % Which frames will be used in the stack
     framesInStack = frameInfo(iStack).frameNums;
-    rawFrames = uint8(zeros(nRows,nCols,numel(frameInfo(iStack).frameNums)));
-
+    switch BitsPerPixel
+        case 8
+            rawFrames = uint8(zeros(nRows,nCols,numel(frameInfo(iStack).frameNums)));
+        case 16
+            rawFrames = uint16(zeros(nRows,nCols,numel(frameInfo(iStack).frameNums)));
+        case 32
+            rawFrames = uint32(zeros(nRows,nCols,numel(frameInfo(iStack).frameNums)));
+    end
+    
     % Print output
     if verbose; 
         fprintf('\nMovie loading for stack %d / %d',iStack,numel(stacksToWrite));
@@ -181,7 +193,7 @@ for iStack = stacksToWrite
     option.BitsPerSample = BitsPerPixel;
     option.Append = false;
     option.Compression = compression;
-    option.BigTiff = true;
+    option.BigTiff = useBigTiff;
 
     tiffWrite(rawFrames,frameInfo(iStack).fileName,tiffDir,option)
 end

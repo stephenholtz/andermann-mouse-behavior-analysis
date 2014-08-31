@@ -12,11 +12,13 @@
 %        /raw/nidaq_*.mat
 %        /raw/stimulus_*.mat
 %        /proc/...
-%        /proc/*.tiff
-%        /proc/stimInfo.mat
+%        /proc/eye*.avi
+%        /proc/eyeStack/*.tiff
+%        /proc/faceStack/*.tiff
+%        /proc/epiStack/*.tiff
+%        /proc/frameNums.mat
+%        /proc/stimTsInfo.mat
 %        .... filled in by this script's functions
-%
-% TODO: update file directory above with expected ouptut
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
@@ -35,7 +37,7 @@ experimentName  = '20140830_02';
 % Process only some of files
 processEyeFiles     = 0;
 processFaceFiles    = 0;
-processEpiFiles     = 1;
+processEpiFiles     = 0;
 processNidaqData    = 1;
 
 %% Establish base filepaths
@@ -91,10 +93,12 @@ if exist(eyeDir,'dir') && processEyeFiles
 
     % These frames are already poorly compressed, might as well save them losslessly
     compression = 'lzw';
+    useBigTiff = false;
+    
     eyeTiffFileName = ['eye_' animalName '_' experimentName '.tiff'];
 
     [~,fN,ext] = fileparts(eyeAviFileName);
-    movie2TiffDir([fN,ext],procDir,eyeTiffFileName,eyeStackDir,compression);
+    movie2TiffDir([fN,ext],procDir,eyeTiffFileName,eyeStackDir,compression,useBigTiff);
 
 elseif ~processEyeFiles
     fprintf('Skipping eye file preprocessing...\n')
@@ -116,6 +120,7 @@ if exist(faceDir,'dir') && processFaceFiles
     
     % Convert avi to tiff and mat files (expects cell array)
     compression = 'jpeg';
+    useBigTiff = false;
 
     faceStackDir = fullfile(procDir,'faceStacks');
     if ~exist(faceStackDir,'dir')
@@ -123,7 +128,7 @@ if exist(faceDir,'dir') && processFaceFiles
     end
 
     faceTiffName = [animalName '_' experimentName '.tiff'];
-    movie2TiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression);
+    movie2TiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression,useBigTiff);
 
 elseif ~processFaceFiles
     fprintf('Skipping face file preprocessing...\n')
@@ -135,18 +140,26 @@ end
 epiDir = fullfile(rawDir,'epi');
 if exist(epiDir,'dir') && processEpiFiles
     fprintf('Starting epi file preprocessing...\n')
-    % Should only be one avi file with epi data
-    epiDirFiles = dir([epiDir filesep 'epi*.avi']);
-    epiFileNames = {epiDirFiles(1).name};
+    % Should only be one movie file with epi data AND exp in the name
+    epiDirFiles = dir([epiDir filesep 'epi*exp*.*']);
+    if isempty(epiDirFiles)
+        error('No epi experiment files found')
+    elseif numel(epiDirFiles) > 1
+        warning('Multiple epi experiment files found!')
+    else
+        epiFileNames = {epiDirFiles(1).name};
+    end
 
     epiStackDir = fullfile(procDir,'epiStacks');
     if ~exist(epiStackDir,'dir')
         mkdir(epiStackDir)
     end
-
+    
+    useBigTiff = false;
     compression = 'lzw';
+    
     epiTiffName = ['epi_' animalName '_' experimentName '.tiff'];
-    movie2TiffDir(epiFileNames,epiDir,epiTiffName,epiStackDir,compression);
+    movie2TiffDir(epiFileNames,epiDir,epiTiffName,epiStackDir,compression,useBigTiff);
 elseif ~processEpiFiles
     fprintf('Skipping epi files preprocessing...\n')
 else

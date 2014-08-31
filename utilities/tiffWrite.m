@@ -29,7 +29,7 @@ if ~isfield(option,'BitsPerSample')
     option.BitsPerSample = 16;
 end
 if ~isfield(option,'BigTiff')
-    option.Append = false;
+    option.BigTiff = false;
 end
 % Add extension:
 if isempty(regexp(fileName, '\.tiff?$', 'ignorecase'))
