@@ -1,4 +1,4 @@
-function varargout = tiffRead(fPath, castType)
+function varargout = tiffRead(fPath,frames,castType)
 % img = tiffLoad(fPath, [castType]); [img, scanimage] = tiffLoad(fPath);
 % 
 % Load (big)tiffs with optional scanimage support, using the matlab
@@ -33,14 +33,21 @@ end
 t = Tiff(fPath);
 
 % Get number of directories (= frames):
-t.setDirectory(1);
-while ~t.lastDirectory
-    t.nextDirectory;
+if exist('frames','var')
+    nDirectories = numel(frames);
+    % make sure frames is iterable
+    frames = squeeze(frames)';
+else
+    t.setDirectory(1);
+    while ~t.lastDirectory
+        t.nextDirectory;
+    end
+    nDirectories = t.currentDirectory;
+    frames = 1:nDirectories;
 end
-nDirectories = t.currentDirectory;
 
 % Load all directories (= frames):
-img = zeros(t.getTag('ImageLength'), ...
+img = zeros(t.getTag('ImageLength'),...
     t.getTag('ImageWidth'), ...
     nDirectories, ...
     castType);
@@ -49,12 +56,14 @@ img = zeros(t.getTag('ImageLength'), ...
 n = ceil(log10(nDirectories));
 prtStr = ['%' num2str(n) '.d / %' num2str(n) '.d frames loaded.'];
 fprintf(prtStr,0,nDirectories)
-for i = 1:nDirectories
-    t.setDirectory(i);
+i = 1;
+for f = frames
+    t.setDirectory(f);
     img(:,:,i) = t.read;
     if ~mod(i, 100)
         fprintf([repmat('\b',1,length(prtStr)+2) prtStr], i, nDirectories);
     end
+    i = i + 1;
 end
 fprintf('\n')
 
@@ -62,6 +71,8 @@ varargout{1} = img;
 
 % Scanimage metadata: Tiffs saved by Scanimage contain useful metadata in
 % form of a struct. This data can be requested as a second output argument.
+%
+%%% NOTE: not updated to work with pulling in subsets of directories!!
 if nargout > 1
     imgDesc = t.getTag('ImageDescription');
     imgDescC = regexp(imgDesc, 'scanimage\..+? = .+?(?=\n)', 'match');

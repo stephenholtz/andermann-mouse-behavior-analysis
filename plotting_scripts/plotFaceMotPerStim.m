@@ -5,8 +5,8 @@
 % SLH 2014
 
 %% Set up filepaths
-animalName  = 'K71';
-expDateNum  = '20140815_01';
+animalName  = 'K51';
+expDateNum  = '20140830_02';
 saveFigs    = 1;
 
 % Get the base location for data, see function for details
@@ -30,8 +30,8 @@ epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
 % Path for nidaq data
 nidaqFileName = dir(fullfile(rawDir,'nidaq_*.mat'));
 nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
-% Load data from experiment 'exp' struct
-if ~exist('exp','var')
+% Load data from experiment 'daq' struct
+if ~exist('daq','var')
     load(nidaqFilePath);
 end
 
@@ -42,8 +42,8 @@ load(fullfile(procDir,'stimTsInfo.mat'));
 
 % loop over data to make a large matrix
 % This part is simple because we want the time from stimulus onset to offset
-epiRate       = exp.daqRate*(1/median(frameNums.epiIfi));
-faceRate      = exp.daqRate*(1/median(frameNums.face));
+epiRate       = daq.daqRate*(1/median(frameNums.epiIfi));
+faceRate      = daq.daqRate*(1/median(frameNums.face));
 daqRate       = 5000;
 durPrevSecs   = .5;
 durPostSecs   = .5;
