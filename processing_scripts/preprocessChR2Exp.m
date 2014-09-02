@@ -22,7 +22,7 @@
 %
 % SLH 2014
 %#ok<*NBRAK,*UNRCH>
-forceClear = 0;
+forceClear = 1;
 if forceClear
     clear all force
     close all force
@@ -32,12 +32,12 @@ ticH = tic;
 
 %% Set Animal/Experiment Specific information
 animalName      = 'K51';
-experimentName  = '20140830_02';
+experimentName  = '20140902_01';
 
 % Process only some of files
-processEyeFiles     = 0;
-processFaceFiles    = 0;
-processEpiFiles     = 0;
+processEyeFiles     = 1;
+processFaceFiles    = 1;
+processEpiFiles     = 1;
 processNidaqData    = 1;
 
 %% Establish base filepaths
@@ -110,10 +110,8 @@ end
 faceDir = fullfile(rawDir,'face');
 if exist(faceDir,'dir') && processFaceFiles
     fprintf('Starting face file preprocessing...\n')
-    % Sort the file names and pass to converter function
     faceDirFiles = dir([faceDir filesep '*.avi']);
-    [~,faceFileOrder]= sort([faceDirFiles(:).datenum]);
-    faceFileNames = {faceDirFiles(faceFileOrder).name};
+    faceFileNames = {faceDirFiles.name};
 
     % Get the number of frames in the movies for error checking
     movFrames = getNumMovFrames(faceFileNames,faceDir);
@@ -194,9 +192,9 @@ if processNidaqData
     [frameNums.epi,frameNums.epiIfi]   = getCamFrameNumFromDaq(daq.Data(daqCh.epiStrobe,:),'strobe',1);
     
     % Save the frame rate
-    frameNums.faceRate = (median(frameNums.faceIfi) / daq.daqRate);
-    frameNums.eyeRate = (median(frameNums.eyeIfi) / daq.daqRate);
-    frameNums.epiRate = (median(frameNums.epiIfi) / daq.daqRate);
+    frameNums.faceRate = (median(frameNums.faceIfi) \ daq.daqRate);
+    frameNums.eyeRate = (median(frameNums.eyeIfi) \ daq.daqRate);
+    frameNums.epiRate = (median(frameNums.epiIfi) \ daq.daqRate);
     
     % Save stimulus timing info
     frameNumsFile = fullfile(procDir,['frameNums.mat']);
@@ -208,7 +206,7 @@ if processNidaqData
     daqCh.PTB       = 2;
 
     % For easy parsing, specify inter stim interval
-    interStimInt = 0.5;
+    interStimInt = stim.durOff;
     fprintf('Finding stimulus onsets in daq data\n');
     [stimOnOff,stimOnsets,stimOffsets] = ptbFramePulsesToSquare(daq.Data(daqCh.PTB,:),daq.daqRate,interStimInt);
     % LED signal is very reliable, no need to clean up timing info
@@ -217,6 +215,7 @@ if processNidaqData
     % Generate structure with stimulus types and timing (+ other variables for debug)
     stimStruct       = getPtbStimTsInfo(stimOnOff,ledOnOff,stim);
     stimTsInfo.all   = stimStruct;
+    % Convert logical fields to doubles here rather than in processing scripts (Plenty-O-HDD space)
     stimTsInfo.ptb   = 0+stimOnOff(:);
     stimTsInfo.ledOn = 0+ledOnOff(:);
 

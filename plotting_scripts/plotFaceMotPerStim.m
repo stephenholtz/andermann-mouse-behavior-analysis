@@ -4,10 +4,9 @@
 %
 % SLH 2014
 
-%% Set up filepaths
+%% Set up filepaths / load processed data 
 animalName  = 'K51';
 expDateNum  = '20140830_02';
-saveFigs    = 1;
 
 % Get the base location for data, see function for details
 if ispc
@@ -24,41 +23,78 @@ procDir = fullfile(expDir,'proc');
 rawDir = fullfile(expDir,'raw');
 % figure saving
 figDir = fullfile(expDir,'figs');
-% Epi imaging tiff path
-epiTiffPath = dir([procDir filesep 'epi_*.tiff']);
-epiTiffPath = fullfile(procDir,epiTiffPath(1).name);
+% Metadata path
+metaPath = dir([rawDir filesep 'stimulus_metadata*.mat']);
+metaPath = fullfile(rawDir,metaPath(1).name);
+% Load data from 'stim' struct
+if ~exist('stim','var')
+    load(metaPath);
+end
 % Path for nidaq data
 nidaqFileName = dir(fullfile(rawDir,'nidaq_*.mat'));
 nidaqFilePath = fullfile(rawDir,nidaqFileName(1).name);
 % Load data from experiment 'daq' struct
 if ~exist('daq','var')
+    fprintf('loading nidaq data...')
     load(nidaqFilePath);
+    fprintf(' done\n')
 end
 
-% Load processed variables
 load(fullfile(procDir,'faceMotion.mat'));
 load(fullfile(procDir,'frameNums.mat'));
 load(fullfile(procDir,'stimTsInfo.mat'));
 
-% loop over data to make a large matrix
-% This part is simple because we want the time from stimulus onset to offset
-epiRate       = daq.daqRate*(1/median(frameNums.epiIfi));
-faceRate      = daq.daqRate*(1/median(frameNums.face));
-daqRate       = 5000;
-durPrevSecs   = .5;
-durPostSecs   = .5;
+%% Common plotting variables
+saveFigs              = 1;
 
+% Make these plots
+plotLumped            = 1;
+plotLumpedComparisons = 1;
+plotPerStimMotDiff    = 1;
+
+% Use these analysis windows
 stimTimeSec            = stim.durOn;
-preStimTimeSec         = 1;
-preStimTimeSamps       = daqRate*preStimTimeSec;
-postStimTimeSec        = 1;
-postStimTimeSamps      = daqRate*postStimTimeSec;
-nReliableFrames        = camFrameRate*(preStimTimeSec+postStimTimeSec+stimTimeSec) - 10;
-nReliablePreStimFrames = camFrameRate*(preStimTimeSec) - 10;
+preStimTimeSec         = .25;
+preStimTimeSamps       = daq.daqRate*preStimTimeSec;
+postStimTimeSec        = .25;
+postStimTimeSamps      = daq.daqRate*postStimTimeSec;
+nReliableFrames        = floor(frameNums.faceRate*(preStimTimeSec+postStimTimeSec+stimTimeSec) - 6);
+nReliablePreStimFrames = floor(frameNums.faceRate*(preStimTimeSec) - 6);
 
 %----------------------------------------------------------------------
 %% Combine Stimuli across entire experiment (different stimSets)
-i = 1;
+[nBlocks,nStims,nReps] = size(stimTsInfo.all);
+for iStim = 1:6
+    iRoi = 1;
+    rowIter = 1;
+    for iBlock = 1:nBlocks
+        for iRep = 1:nReps
+            stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
+            stimOnsetInd = stimDaqBounds(1);
+            stimOffsetInd = stimDaqBounds(2);
+            % Get the daq timeseries ind where this stimulus started (minus prestimtime)
+            startDaqInd = stimOnsetInd - preStimTimeSamps;
+            % Get the frame number of that starting daq ind
+            startFrameInd = frameNums.face(startDaqInd);
+            % Determine ending daq point
+            endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
+            endFrameInd = frameNums.face(endDaqInd);
+
+            % Number of frames is somewhat unreliable, truncate all to same length
+            framesToUse = startFrameInd:endFrameInd;
+            framesToUse = framesToUse(1:nReliableFrames);
+
+            % Use the abs motion vector, (x^2 + y^2)^(1/2)
+            x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
+            y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
+            absMotion = sqrt(x.^2 + y.^2);
+            motionTs.('noSub').all{iStim}(rowIter,:) = absMotion;
+            motionTs.('baseSub').all{iStim}(rowIter,:) = absMotion - median(absMotion(1:nReliablePreStimFrames));
+
+            rowIter = rowIter + 1;
+        end
+    end
+end
 for stimSet = 1:6
     switch stimSet
         case 1
@@ -79,28 +115,46 @@ for stimSet = 1:6
         case 6
             stimsToUse = [4 5];
             setName = 'ledOnVis';
+        case 7
+            stimsToUse = 1;
+            setName = 'medStimLedOff';
+        case 8
+            stimsToUse = 2;
+            setName = 'latStimLedOff';
+        case 9
+            stimsToUse = 4;
+            setName = 'medStimLedOn';
+        case 10
+            stimsToUse = 5;
+            setName = 'latStimLedOn';
     end
 
+    iRoi = 1;
     rowIter = 1;
-    for iBlock = 1:size(stimTsInfo.all,1)
+    for iBlock = 1:nBlocks
         for iStim = stimsToUse
-            for iRep = 1:numel([stimTsInfo.all{iBlock,iStim,:}])
-                stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
+            for iRep = 1:nReps
+                stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
+                stimOnsetInd = stimDaqBounds(1);
+                stimOffsetInd = stimDaqBounds(2);
                 % Get the daq timeseries ind where this stimulus started (minus prestimtime)
                 startDaqInd = stimOnsetInd - preStimTimeSamps;
                 % Get the frame number of that starting daq ind
                 startFrameInd = frameNums.face(startDaqInd);
                 % Determine ending daq point
-                endDaqInd = stimOnsetInd + stimTimeSec*daqRate + postStimTimeSamps;
+                endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
                 endFrameInd = frameNums.face(endDaqInd);
 
                 % Number of frames is somewhat unreliable, truncate all to same length
                 framesToUse = startFrameInd:endFrameInd;
                 framesToUse = framesToUse(1:nReliableFrames);
-                motionTs.('noSub').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4);
 
-                preStimFrames = startFrameInd:startFrameInd+nReliablePreStimFrames;
-                motionTs.('baselineSub').(setName)(rowIter,:) = faceMotion.(method)(framesToUse,4) - median(faceMotion.(method)(preStimFrames,4));
+                % Use the abs motion vector, (x^2 + y^2)^(1/2)
+                x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
+                y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
+                absMotion = sqrt(x.^2 + y.^2);
+                motionTs.('noSub').(setName)(rowIter,:) = absMotion;
+                motionTs.('baseSub').(setName)(rowIter,:) = absMotion - median(absMotion(1:nReliablePreStimFrames));
 
                 rowIter = rowIter + 1;
             end
@@ -112,10 +166,8 @@ end
 %% Plot the combined stimulus motion responses
 
 % Baselinesubtracted or raw traces
-procType = 'noSub';
-%procType = 'baselineSub';
-
-plotLumped = 1;
+%procType = 'noSub';
+procType = 'baseSub';
 if plotLumped
     % These should be the same for all plots
     xTsVector = (1:size(motionTs.(procType).all,2))/camFrameRate;
@@ -144,6 +196,18 @@ if plotLumped
             case 6
                 setName = 'ledOnVis';
                 titleStr =({'Facial motion to visual stimuli LED On',''});
+            case 7
+                setName = 'medStimLedOff';
+                titleStr =({'Facial motion to medial visual stimuli LED off',''});
+            case 8
+                setName = 'latStimLedOff';
+                titleStr =({'Facial motion to lateral visual stimuli LED off',''});
+            case 9
+                setName = 'medStimLedOn';
+                titleStr =({'Facial motion to medial visual stimuli LED On',''});
+            case 10 
+                setName = 'latStimLedOn';
+                titleStr =({'Facial motion to lateral visual stimuli LED On',''});
         end
 
         figure();
@@ -164,7 +228,6 @@ end
 
 %----------------------------------------------------------------------
 %% Plot comparisons of averaged motion responses
-plotLumpedComparisons = 1;
 if plotLumpedComparisons
     % These should be the same for all plots
     xTsVector = (1:size(motionTs.(procType).all,2))/camFrameRate;
@@ -172,7 +235,7 @@ if plotLumpedComparisons
     offsetSeconds = 2;
     yLabel = 'Pixel Shift';
     xLabel = 'Time (s)';
-    for comparisonType = 1:3
+    for comparisonType = 1:4
         switch comparisonType
             case 1
                 setName1 = 'allVis';
@@ -192,6 +255,18 @@ if plotLumpedComparisons
                 titleStr = {'Facial motion with LED off vs LED on'};
                 setLegName1 = 'LED Off Vis Stim';
                 setLegName2 = 'LED On Vis Stim';
+            case 4
+                setName1 = 'medStimLedOff';
+                setName2 = 'latStimLedOff';
+                titleStr = {'Facial motion medial vs lateral stim w/LED on'};
+                setLegName1 = 'LED Off Med Vis Stim';
+                setLegName2 = 'LED Off Lat Vis Stim';
+            case 5
+                setName1 = 'medStimLedOn';
+                setName2 = 'latStimLedOn';
+                titleStr = {'Facial motion medial vs lateral stim w/LED on'};
+                setLegName1 = 'LED On Med Vis Stim';
+                setLegName2 = 'LED On Lat Vis Stim';
         end
         
         figure();
@@ -214,45 +289,63 @@ if plotLumpedComparisons
         end
     end
 end
+
 %----------------------------------------------------------------------
 %% Calculate reponses in a window after stimulus onset (wrt baseline)
 procType = 'baselineSub';
+moct = 'median';
 postStimRespWindowMs = 250;
 nFramesRespWindow = floor(postStimRespWindowMs/1000*camFrameRate) - 2;
 rowIter = 1;
-for iBlock = 1:size(stimTsInfo.all,1)
+for iBlock = 1:nBlocks
     % New col for each stimulus rep / type (should be 1:18)
     colIter = 1;
     for iStim = 1:6
-        for iRep = 1:numel([stimTsInfo.all{iBlock,iStim,:}])
-            stimOnsetInd = stimTsInfo.all{iBlock,iStim,iRep};
-            stimOnFrameInd = frameNums.face(stimOnsetInd);
-            % Get the daq timeseries ind where this stimulus started (minus prestimtime)
-            startDaqInd = stimOnsetInd - preStimTimeSamps;
-            % Get the frame number of that starting daq ind
-            startFrameInd = frameNums.face(startDaqInd);
+        for iRep = 1:nReps
+                stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
+                stimOnsetInd = stimDaqBounds(1);
+                stimOffsetInd = stimDaqBounds(2);
+                % Get the daq timeseries ind where this stimulus started (minus prestimtime)
+                startDaqInd = stimOnsetInd - preStimTimeSamps;
+                % Get the frame number of that starting daq ind
+                startFrameInd = frameNums.face(startDaqInd);
+                % Determine ending daq point
+                endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
+                endFrameInd = frameNums.face(endDaqInd);
 
-            % Number of frames is somewhat unreliable, truncate all to same length
-            framesToUse = stimOnFrameInd:(stimOnFrameInd+nFramesRespWindow);
-            preStimFrames = startFrameInd:startFrameInd+nReliablePreStimFrames;
-            motion.('median')(rowIter,colIter) = median(faceMotion.(method)(framesToUse,4)) - median(faceMotion.(method)(preStimFrames,4));
+                % Number of frames is somewhat unreliable, truncate all to same length
+                framesToUse = stimOnFrameInd:(stimOnFrameInd+nFramesRespWindow);
+                preFramesToUse = (stimOnFrameInd-nReliablePreStimFrames):stimOnFrameInd; 
+
+                % Use the abs motion vector, (x^2 + y^2)^(1/2)
+                x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
+                y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
+                absPostMotion = sqrt(x.^2 + y.^2);
+                x = faceMotion.stackRegCell{iRoi}(preFramesToUse,4);
+                y = faceMotion.stackRegCell{iRoi}(preFramesToUse,3); 
+                absPreMotion = sqrt(x.^2 + y.^2);
+                %motion.(setName)(rowIter,:) = absMotion;
+                motion.(setName)(rowIter,colIter) = median(absPreMotion) - median(absPostMotion);
+
+            motion.(moct)(rowIter,colIter) = median(faceMotion.stackRegCell(framesToUse,4)) - median(faceMotion.stackRegCell(preStimFrames,4));
             colIter = colIter + 1;
         end
     end
     rowIter = rowIter + 1;
 end
 
-plotPerStimMotDiff = 1;
+%----------------------------------------------------------------------
+%% Plot responses in window pre vs post 
 if plotPerStimMotDiff
-    method = 'median';
+    moct = 'median';
     % These should be the same for all plots
     yLabel = {'Median Diff Pixel Shift','Pre vs 250ms Post Stimulus Onset'};
     xLabel = 'Stimulus Type';
     titleStr = 'Difference in motion across all block repetitions';
     figure();
-    plot(motion.(method)')
+    plot(motion.(moct)')
     hold all
-    plot(mean(motion.(method)),'LineWidth',3,'Color','k');
+    plot(mean(motion.(moct)),'LineWidth',3,'Color','k');
     ylabel(yLabel)
     xlabel(xLabel)
     set(gca,'Xtick',1:18)

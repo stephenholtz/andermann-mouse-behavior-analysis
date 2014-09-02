@@ -10,10 +10,10 @@
 
 %% Specify animal/experiment/data location
 animalName = 'K51';
-expDateNum = '20140830_02';
+expDateNum = '20140902_01';
 
 % makes a set of stacks with dffs for troubleshooting
-makeEpiDffStacks = 1;
+makeEpiDffStacks = 0;
 
 % do ROI analysis (makeNewRois and makeRoiDffTraces require this)
 processEpiRois = 1;
@@ -76,9 +76,10 @@ ledCh = 1;
 
 %% Do / save epi analysis (ROI and DFF)
 
+% Load in the full stack if it isn't already in memory
 if ~exist('epi','var')
-    % Funciton well tested, use with caution
     fprintf('Loading all epi stacks...\n');
+    % My version of read tiff folder, doesn't total progress indicator...
     epi = readTiffStackFolder(epiStackDir,inf,'double');
 end
 
@@ -119,13 +120,12 @@ if makeEpiDffStacks
     end
     clear dff
     fprintf('\n')
-    % Save the dffs so I don't need to load in the epi file every time
-    fprintf('Saving epi dff stacks in: %s\n',fullfile(procDir,'epiStack.mat'));
-    save(fullfile(procDir,'epiStack.mat'),'epiStack','-v7.3');
     % Calculate means now and save as separate var for quick loading
     % easiest way: one for each stimulus type
     clear flipStimStack
+    fprintf('Making Mean Epi Dff stacks\nStim: ');
     for iS = 1:nStims
+        fprintf('%2.f ',iS);
         iTS = 1;
         for iB = 1:nBlocks
             for iR = 1:numel(epiStack(iB,iS,:))
@@ -139,23 +139,40 @@ if makeEpiDffStacks
         end
         % Unflip the data align all by ending and then take the mean along the reps (4th dim)
         % take the average and store in epiStackMean struct
-        epiStackMean(iS).dff = squeeze(mean(flip(flipStimStack,3),4));
+        epiStackMean(iS).dff = (mean(flip(flipStimStack,3),4));
         clear flipStimStack
     end
+    fprintf('\n')
+
     fprintf('Saving mean epi dff stacks in: %s\n',fullfile(procDir,'epiStackMean.mat'));
     save(fullfile(procDir,'epiStackMean.mat'),'epiStackMean','-v7.3');
+
+    % Save a sample of the dffs so I don't need to load in the epi file every time
+    epiStack = epiStack(2,:,:);
+    fprintf('Saving sample epi dff stacks in: %s\n',fullfile(procDir,'epiStack.mat'));
+    save(fullfile(procDir,'epiStack.mat'),'epiStack','-v7.3');
+end
+
+% Show a few videos to get the ROI right
+showMov = 1;
+if showMov
+    iS = 1;
+    for iF= 1:size(epiStackMean(iS).dff,3)
+        imshow(epiStackMean(iS).dff(:,:,iF));
+        pause(.1)
+    end
 end
 
 if processEpiRois
 %% Image info / ROIs
     % Get image info command will be slow due to large file size
     % Load sample frame to set ROI(s)
-    useDffForRoi = 1;
+    useDffForRoi = 0;
     if useDffForRoi
         load(fullfile(procDir,'epiStackMean.mat'));
-        epiSampImage = epiStackMean(2).dff;
+        epiSampImage = max(epiStackMean(1).dff,[],3);
     else
-        epiSampImage = readTiffStackFolder(epiStackDir,9202,'double'); 
+        epiSampImage = readTiffStackFolder(epiStackDir,202,'double'); 
     end
 
     % Load in rois or make new ones
@@ -195,11 +212,6 @@ if processEpiRois
         load(fullfile(procDir,'epiROIs.mat'))
     end
 
-    % Pull in the entire tiff stack if needed
-    if ~exist('epi','var') && (makeRoiDffTraces || makeNewRois)
-        epi = tiffRead(epiTiffPath,'double');
-    end
-
 %% Determine frames for analysis and calculate DFFs
 
     % Calculate DFF, assume the second ROI is the background one
@@ -210,7 +222,7 @@ if processEpiRois
     % Place dff and frames used to calculate it in a struct 
     % for easy plotting later
     fprintf('Calculating DeltaF/F...\n')
-    if calcNewDff || ~exist(fullfile(procDir,'epiTrace.mat'),'file')
+    if makeRoiDffTraces || ~exist(fullfile(procDir,'epiTrace.mat'),'file')
         fprintf('Block: ');
         for iB = 1:nBlocks
             fprintf('%2.f ',iB);
@@ -226,84 +238,69 @@ if processEpiRois
                     analStart = ledStart - dffFramesPrev;
                     analEnd   = ledEnd + dffFramesPost;
 
-                    % Determine daq inds of adjusted frames
+                    % Which frames will be used for calculating f0 and f
+                    f0FrameNums = analStart:(ledStart-1);
+                    fFrameNums = analStart:analEnd;
+
+                    % Get f0 with means
+                    iFrame = 1;
+                    f0 = zeros(numel(f0FrameNums),1);
+                    for f = f0FrameNums
+                        currFrame = epi(:,:,f);
+                        f0(iFrame) = mean(currFrame(foreMask));
+                        iFrame = iFrame + 1;
+                    end
+                    f0 = mean(f0);
+
+                    % store dff and f0 in a HUGE struct
+                    dff = zeros(numel(fFrameNums),1);
+                    f   = zeros(numel(fFrameNums),1);
+                    iFrame = 1;
+                    for f = fFrameNums
+                        currFrame = epi(:,:,f);
+                        dff(iFrame) = (mean(currFrame(foreMask))-median(currFrame(bckMask)))./(f0-median(currFrame(bckMask))) - 1;
+                        iFrame = iFrame + 1; 
+                    end
+
+                    epiTrace(iB,iS,iR).dff = dff;
+                    epiTrace(iB,iS,iR).f0 = f0;
+                    epiTrace(iB,iS,iR).iLedOn = dffFramesPrev;
+                    epiTrace(iB,iS,iR).iLedOff = numel(dff) - dffFramesPost;
+
+                    % Which frames will be used for calculating f0
+                    epiTrace(iB,iS,iR).f0Frames = f0FrameNums;
+                    epiTrace(iB,iS,iR).fFrames = fFrameNums;
+
+                    % Save all this for exhaustive troubleshooting
                     daqLedStart  = find(frameNums.epi == ledStart,1,'first');
                     daqLedEnd    = find(frameNums.epi == ledEnd,1,'last');
                     daqAnalStart = find(frameNums.epi == analStart,1,'first');
                     daqAnalEnd   = find(frameNums.epi == analEnd,1,'last');
 
-                    % Which frames will be used for calculating f0
-                    epiTrace(iB,iS,iR).f0Frames = [analStart (ledStart-1)];
-
-                    % Save all this for exhaustive troubleshooting
                     epiTrace(iB,iS,iR).ledFrames   = [ledStart ledEnd];
                     epiTrace(iB,iS,iR).nLedFrames  = ledEnd-ledStart+1;
                     epiTrace(iB,iS,iR).analFrames  = [analStart analEnd];
                     epiTrace(iB,iS,iR).nAnalFrames = analEnd-analStart+1;
                     epiTrace(iB,iS,iR).daqLedInds  = [daqLedStart daqLedEnd];
                     epiTrace(iB,iS,iR).daqAnalInds = [daqAnalStart daqAnalEnd];
-
-                    % The ind of the frame that everything should be aligned to is the end of the LED 
-                    epiTrace(iB,iS,iR).alignmentInd = find(ledEnd==range2vec(epiTrace(iB,iS,iR).analFrames));
-
-                    % Calculate the f0
-                    iFrame = 1;
-                    for frame = range2vec(epiTrace(iB,iS,iR).f0Frames)
-                        currEpiFrame = epi(:,:,frame);
-                        f0(iFrame) = mean(currEpiFrame(foreMask));
-
-                        iFrame = iFrame + 1;
-                    end
-
-                    f0 = mean(f0);
-                    epiTrace(iB,iS,iR).f0 = f0;
-
-                    % Calculate the dff
-                    iFrame = 1;
-                    for frame = range2vec(epiTrace(iB,iS,iR).analFrames)
-                        currEpiFrame = epi(:,:,frame);
-
-                        % Calculate individual signals for testing
-                        f     = mean(currEpiFrame(foreMask));
-                        fBck  = mean(currEpiFrame(bckMask));
-                        fTest = mean(currEpiFrame(testMask));
-
-                        fSub  = f-fBck;
-                        f0Sub = f0-fBck;
-
-                        epiTrace(iB,iS,iR).f0(iFrame)    = f0;
-                        epiTrace(iB,iS,iR).f(iFrame)     = f;
-                        epiTrace(iB,iS,iR).fBck(iFrame)  = fBck;
-                        epiTrace(iB,iS,iR).fTest(iFrame) = fTest;
-                        epiTrace(iB,iS,iR).fSub(iFrame)  = fSub;
-
-                        DffNoSub = (f./mean(f0(:)) - 1);
-                        Dff      = (fSub./mean(f0Sub(:)) - 1);
-
-                        % Now get the dff
-                        epiTrace(iB,iS,iR).dffNoSub(iFrame) = DffNoSub;
-                        epiTrace(iB,iS,iR).dff(iFrame)      = Dff;
-
-                        iFrame = iFrame + 1;
-                    end
                 end
             end
         end
-
-        % Clean up while this is still a script
-        clear daqAnal* daqLed* anal* frame iB iS iR f f0 f0Sub fBck fSub DffNoSub Dff ledDaqInds
-        clear currEpiFrame foreMask bckMask
-        fprintf(' Done\n')
-
-        % Save the dffs so I don't need to load in the epi file every time
-        fprintf('Saving epi dff traces in: %s\n',fullfile(procDir,'epiTrace.mat'));
-        save(fullfile(procDir,'epiTrace.mat'),'epiTrace');
-
-    elseif ~exist('dff','var')
-        % Load in if reqd
-        fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiTrace.mat'));
-        load(fullfile(procDir,'epiTrace.mat'))
     end
+
+    % Clean up while this is still a script
+    clear daqAnal* daqLed* anal* frame iB iS iR f f0 f0Sub fBck fSub DffNoSub Dff ledDaqInds
+    clear currEpiFrame foreMask bckMask
+    fprintf(' Done\n')
+
+    % Save the dffs so I don't need to load in the epi file every time
+    fprintf('Saving epi dff traces in: %s\n',fullfile(procDir,'epiTrace.mat'));
+    save(fullfile(procDir,'epiTrace.mat'),'epiTrace');
+
+elseif ~exist('dff','var')
+    % Load in if reqd
+    fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiTrace.mat'));
+    load(fullfile(procDir,'epiTrace.mat'))
 end
 
 

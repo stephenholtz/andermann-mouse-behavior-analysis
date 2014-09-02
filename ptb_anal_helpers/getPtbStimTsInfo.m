@@ -35,6 +35,11 @@ sOffInds = find(diff([sOn(1); sOn(:)])<0);
 lOnInds  = find(diff([lOn(1); lOn(:)])>0);
 lOffInds = find(diff([lOn(1); lOn(:)])<0);
 
+% Source of many headaches, catch the error here so later stim ind lookup works perfectly
+if numel(sOnInds) ~= numel(si.stimOrder)
+    error('Something wrong with stimulus detection or with figuring out which were presented. Check daq trace and output of getPtbStimTsInfo')
+end
+
 block = 1;
 rep = 1;
 ledIter = 1;

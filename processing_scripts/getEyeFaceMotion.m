@@ -13,9 +13,9 @@
 
 %% Specify animal/experiment/data location
 animalName      = 'K51';
-expDateNum      = '20140830_02';
+expDateNum      = '20140902_01';
 nRois           = 6;
-makeNewFaceRois = 0;
+makeNewFaceRois = 1;
 
 % Get the base location for data, see function for details
 if ispc
@@ -61,7 +61,6 @@ if processFaceImages
                     roi(iRoi).label = 'wiskerBaseL';
                 case 6
                     roi(iRoi).label = 'wiskerBaseR';
-
             end
             fprintf('Select ROI %s\n',roi(iRoi).label)
             RoiH = imrect(gca);
@@ -97,6 +96,7 @@ if processFaceImages
                 refFrame{iRoi} = median(currFaceSubStack{iRoi},3);
                 roiFrame{iRoi} = currFaceSubStack{iRoi}(:,:,round(.5*size(currFaceSubStack{iRoi},3)));
             end
+            % stackRegister output described in function & at top of script
             faceMotionCell{iRoi} = [faceMotionCell{iRoi}; stackRegister(currFaceSubStack{iRoi},refFrame{iRoi})];
             totalFrames = size(currFaceSubStack{iRoi},3) + totalFrames;
         end
@@ -109,9 +109,9 @@ if processFaceImages
 end
 
 %------------------------------------------------------------------
-%% EYE Do dialation analysis on eye
+%% EYE
 %------------------------------------------------------------------
-
+% dialation analysis on eye
 %TODO: FINISH!
 
 eyeStackDir = fullfile(procDir,'eyeStacks');
