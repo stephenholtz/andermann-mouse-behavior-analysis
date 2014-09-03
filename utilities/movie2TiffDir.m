@@ -1,5 +1,5 @@
-function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression,useBigTiff)
-%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,[compression='PackBits'],[useBigTiff=false])
+function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,imgsPerStack,compression,useBigTiff)
+%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,[imgsPerStack=1000],[compression='PackBits'],[useBigTiff=false])
 %  
 %   inFiles - cell array of filenames for all movie files
 %   inDir - directory where movie file(s) are located
@@ -20,8 +20,11 @@ end
 if verbose
     fprintf('Creating VideoReader objects\n');
 end
+if ~exist('imgsPerStack','var')
+    imgsPerStack = 1000;
+end
 if ~exist('compression','var')
-    compression = 'PackBits';
+    compression = 'Deflate';
 end
 if ~exist('useBigTiff','var')
     useBigTiff = false;
@@ -62,7 +65,7 @@ switch vObj(1).VideoFormat
 end
 
 % Write stacks from the movies to a folder, with a frameInfo.mat file for lookup
-nPerStack   = 1000;
+nPerStack   = imgsPerStack;
 totalFrames = sum(nFrames);
 framesLeft  = 1:totalFrames;
 

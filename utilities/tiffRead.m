@@ -53,15 +53,16 @@ img = zeros(t.getTag('ImageLength'),...
     castType);
 
 % Read in images, formatted progress
-n = ceil(log10(nDirectories));
-prtStr = ['%' num2str(n) '.d / %' num2str(n) '.d frames loaded.'];
+nDisp = ceil(nDirectories/100);
+nPrt = ceil(log10(nDirectories));
+prtStr = ['%' num2str(nPrt+1) '.d / %' num2str(nPrt+1) '.d frames loaded.'];
 fprintf(prtStr,0,nDirectories)
 i = 1;
 for f = frames
     t.setDirectory(f);
     img(:,:,i) = t.read;
-    if ~mod(i, 100)
-        fprintf([repmat('\b',1,length(prtStr)+2) prtStr], i, nDirectories);
+    if ~mod(i, nDisp)
+        fprintf([repmat('\b',1,length(prtStr)) prtStr], i, nDirectories);
     end
     i = i + 1;
 end

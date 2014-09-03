@@ -36,8 +36,8 @@ experimentName  = '20140902_01';
 
 % Process only some of files
 processEyeFiles     = 0;
-processFaceFiles    = 1;
-processEpiFiles     = 0;
+processFaceFiles    = 0;
+processEpiFiles     = 1;
 processNidaqData    = 0;
 
 %% Establish base filepaths
@@ -94,11 +94,12 @@ if exist(eyeDir,'dir') && processEyeFiles
     % These frames are already poorly compressed, might as well save them losslessly
     compression = 'lzw';
     useBigTiff = false;
+    nPerStack = 1000;
     
     eyeTiffFileName = ['eye_' animalName '_' experimentName '.tiff'];
 
     [~,fN,ext] = fileparts(eyeAviFileName);
-    movie2TiffDir([fN,ext],procDir,eyeTiffFileName,eyeStackDir,compression,useBigTiff);
+    movie2TiffDir([fN,ext],procDir,eyeTiffFileName,eyeStackDir,nPerStack,compression,useBigTiff);
 
 elseif ~processEyeFiles
     fprintf('Skipping eye file preprocessing...\n')
@@ -117,16 +118,17 @@ if exist(faceDir,'dir') && processFaceFiles
     movFrames = getNumMovFrames(faceFileNames,faceDir);
     
     % Convert avi to tiff and mat files (expects cell array)
-    compression = 'PackBits';
+    compression = 'Deflate';
     useBigTiff = false;
-
+    nPerStack = 500;
+    
     faceStackDir = fullfile(procDir,'faceStacks');
     if ~exist(faceStackDir,'dir')
         mkdir(faceStackDir)
     end
 
     faceTiffName = [animalName '_' experimentName '.tiff'];
-    movie2TiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,compression,useBigTiff);
+    movie2TiffDir(faceFileNames,faceDir,faceTiffName,faceStackDir,nPerStack,compression,useBigTiff);
 
 elseif ~processFaceFiles
     fprintf('Skipping face file preprocessing...\n')
@@ -154,11 +156,12 @@ if exist(epiDir,'dir') && processEpiFiles
     end
     
     useBigTiff = false;
-    % LZW or PackBits is fine, lzw might be faster faster, but less comp.
-    compression = 'lzw';
+    % Deflate, LZW or PackBits is fine, lzw might be faster faster, but less comp.
+    compression = 'Deflate';
+    nPerStack = 1000;
     
     epiTiffName = ['epi_' animalName '_' experimentName '.tiff'];
-    movie2TiffDir(epiFileNames,epiDir,epiTiffName,epiStackDir,compression,useBigTiff);
+    movie2TiffDir(epiFileNames,epiDir,epiTiffName,epiStackDir,nPerStack,compression,useBigTiff);
 elseif ~processEpiFiles
     fprintf('Skipping epi files preprocessing...\n')
 else

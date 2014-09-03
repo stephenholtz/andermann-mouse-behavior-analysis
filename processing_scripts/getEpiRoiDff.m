@@ -18,7 +18,7 @@ makeEpiDffStacks = 0;
 % do ROI analysis (makeNewRois and makeRoiDffTraces require this)
 processEpiRois = 1;
 % make new ROIs
-makeNewRois = 1;
+makeNewRois = 0;
 % calculate new dff traces
 makeRoiDffTraces = 1;
 
@@ -72,6 +72,10 @@ dffFramesPost = ceil(durPostSecs*frameNums.epiRate);
 
 % Save a little space and make troubleshooting easier with this anon func
 range2vec = @(v)(v(1):v(2));
+% Server doesn't have flip
+if ~exist('flip','builtin')
+    flip = @(X,D)(flipdim(X,D));
+end
 ledCh = 1;
 
 %% Do / save epi analysis (ROI and DFF)
@@ -167,10 +171,11 @@ if processEpiRois
 %% Image info / ROIs
     % Get image info command will be slow due to large file size
     % Load sample frame to set ROI(s)
-    useDffForRoi = 0;
+    useDffForRoi = 1;
     if useDffForRoi
+        % This kinda works
         load(fullfile(procDir,'epiStackMean.mat'));
-        epiSampImage = max(epiStackMean(1).dff,[],3);
+        epiSampImage = std(epiStackMean(1).dff,[],3);
     else
         epiSampImage = readTiffStackFolder(epiStackDir,202,'double'); 
     end
@@ -179,7 +184,6 @@ if processEpiRois
     if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
         clear roi 
         for iRoi = 1:nRois
-            clf;
             imagesc(epiSampImage);
             switch iRoi
                 case 1
@@ -295,7 +299,7 @@ if processEpiRois
 
     % Save the dffs so I don't need to load in the epi file every time
     fprintf('Saving epi dff traces in: %s\n',fullfile(procDir,'epiTrace.mat'));
-    save(fullfile(procDir,'epiTrace.mat'),'epiTrace');
+    save(fullfile(procDir,'epiTrace.mat'),'epiTrace','-v7.3');
 
 elseif ~exist('dff','var')
     % Load in if reqd

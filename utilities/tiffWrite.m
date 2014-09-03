@@ -16,8 +16,8 @@ end
 if ~exist('option', 'var')
     % uint16 default type
     option.BitsPerSample = 16;
-    % PackBits default Compression
-    option.Compression = 32773;
+    % 'Deflate' as default Compression
+    option.Compression = 32946;
     option.Append = false;
     option.BigTiff= false;
 end
@@ -93,6 +93,8 @@ end
 
 % Use compression
 switch lower(option.Compression)
+    case {'deflate'}
+        option.Compression = Tiff.Compression.Deflate;
     case {'packbits'}
         option.Compression = Tiff.Compression.PackBits;
     case {'lzw'} 
