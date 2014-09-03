@@ -15,7 +15,7 @@
 animalName      = 'K51';
 expDateNum      = '20140902_01';
 nRois           = 6;
-makeNewFaceRois = 1;
+makeNewFaceRois = 0;
 
 % Get the base location for data, see function for details
 if ispc

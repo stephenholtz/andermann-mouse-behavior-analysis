@@ -35,10 +35,10 @@ animalName      = 'K51';
 experimentName  = '20140902_01';
 
 % Process only some of files
-processEyeFiles     = 1;
+processEyeFiles     = 0;
 processFaceFiles    = 1;
-processEpiFiles     = 1;
-processNidaqData    = 1;
+processEpiFiles     = 0;
+processNidaqData    = 0;
 
 %% Establish base filepaths
 
@@ -117,7 +117,7 @@ if exist(faceDir,'dir') && processFaceFiles
     movFrames = getNumMovFrames(faceFileNames,faceDir);
     
     % Convert avi to tiff and mat files (expects cell array)
-    compression = 'jpeg';
+    compression = 'PackBits';
     useBigTiff = false;
 
     faceStackDir = fullfile(procDir,'faceStacks');
@@ -154,6 +154,7 @@ if exist(epiDir,'dir') && processEpiFiles
     end
     
     useBigTiff = false;
+    % LZW or PackBits is fine, lzw might be faster faster, but less comp.
     compression = 'lzw';
     
     epiTiffName = ['epi_' animalName '_' experimentName '.tiff'];

@@ -1,11 +1,11 @@
 function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,compression,useBigTiff)
-%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,[compression='LZW'],[useBigTiff=false])
+%function movie2TiffDir(inFiles,inDir,tiffName,tiffDir,[compression='PackBits'],[useBigTiff=false])
 %  
 %   inFiles - cell array of filenames for all movie files
 %   inDir - directory where movie file(s) are located
 %   tiffName - base name that will be prepended
 %   tiffDir - dir that tiff stacks will be written to
-%   compression - use 'JPEG' or 'LZW'
+%   compression - use  'PackBits' (preferred lossless), 'JPEG' or 'LZW'
 %
 %   Does not have much input error checking, careful!
 %  
@@ -21,7 +21,7 @@ if verbose
     fprintf('Creating VideoReader objects\n');
 end
 if ~exist('compression','var')
-    compression = 'LZW';
+    compression = 'PackBits';
 end
 if ~exist('useBigTiff','var')
     useBigTiff = false;

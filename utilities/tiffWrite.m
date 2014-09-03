@@ -1,5 +1,5 @@
 function tiffWrite(img, fileName, filePath, option)
-% tiffWrite(img, [fileName], [filePath], [bitDepth/append])
+% tiffWrite(img, [fileName], [filePath], [bitDepth/append/compression])
 
 if ~isa(img, 'numeric')
     error('First argument must be numeric (image to save).');
@@ -14,8 +14,10 @@ if ~exist('filePath', 'var') || isempty(filePath)
 end
 
 if ~exist('option', 'var')
+    % uint16 default type
     option.BitsPerSample = 16;
-    option.Compression = 16;
+    % PackBits default Compression
+    option.Compression = 32773;
     option.Append = false;
     option.BigTiff= false;
 end
@@ -91,6 +93,8 @@ end
 
 % Use compression
 switch lower(option.Compression)
+    case {'packbits'}
+        option.Compression = Tiff.Compression.PackBits;
     case {'lzw'} 
        option.Compression = Tiff.Compression.LZW; 
     case {'jpeg'} 
