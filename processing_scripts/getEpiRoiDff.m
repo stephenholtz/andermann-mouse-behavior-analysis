@@ -256,13 +256,22 @@ if processEpiRois
                     end
                     f0 = mean(f0);
 
-                    % Get the background signal
+                    % Get the background and foreground signal
                     fBck = zeros(numel(fFrameNums),1);
+                    fSig   = zeros(numel(fFrameNums),1);
+                    iFrame = 1;
+                    for f = fFrameNums
+                        currFrame = epi(:,:,f);
+                        fBck(iFrame) = mean(currFrame(bckMask));
+                        fSig(iFrame) = mean(currFrame(foreMask));
+                        iFrame = iFrame + 1;
+                    end
                     
-                    
+                    % Get the noise first component from the two
+                    [pcaCoeff,pcaScore] = pca([fBck' fSig']);
+                     
                     % store dff and f0 in a HUGE struct
                     dff = zeros(numel(fFrameNums),1);
-                    f   = zeros(numel(fFrameNums),1);
                     iFrame = 1;
                     for f = fFrameNums
                         currFrame = epi(:,:,f);
