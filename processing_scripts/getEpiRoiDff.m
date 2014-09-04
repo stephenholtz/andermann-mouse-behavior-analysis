@@ -155,58 +155,58 @@ if makeEpiDffStacks
     epiStack = epiStack(2,:,:);
     fprintf('Saving sample epi dff stacks in: %s\n',fullfile(procDir,'epiStack.mat'));
     save(fullfile(procDir,'epiStack.mat'),'epiStack','-v7.3');
+
+    % Show a few videos to get the ROI right
+    showMov = 1;
+    if showMov
+        iS = 1;
+        for iF= 1:size(epiStackMean(iS).dff,3)
+            imshow(epiStackMean(iS).dff(:,:,iF));
+            pause(.1)
+        end
+    end
+
 end
 
-% Show a few videos to get the ROI right
-showMov = 1;
-if showMov
-    iS = 1;
-    for iF= 1:size(epiStackMean(iS).dff,3)
-        imshow(epiStackMean(iS).dff(:,:,iF));
-        pause(.1)
-    end
-end
 
 if processEpiRois
 %% Image info / ROIs
     % Get image info command will be slow due to large file size
-    % Load sample frame to set ROI(s)
-    useDffForRoi = 1;
-    if useDffForRoi
-        % This kinda works
-        load(fullfile(procDir,'epiStackMean.mat'));
-        epiSampImage = std(epiStackMean(1).dff,[],3);
-    else
-        epiSampImage = readTiffStackFolder(epiStackDir,202,'double'); 
-    end
-
     % Load in rois or make new ones
     if makeNewRois || ~exist(fullfile(procDir,'epiROIs.mat'),'file')
-        clear roi 
+        % Load sample frame to set ROI(s)
+        if ~exist('epiStackMean','var')
+            % This kinda works
+            load(fullfile(procDir,'epiStackMean.mat'));
+        end
+        clear roi
+        close all force
+        
         for iRoi = 1:nRois
-            imagesc(epiSampImage);
             switch iRoi
                 case 1
                     % The primary region of interest, makes up F signal
-                    % "foreMask"
+                    % "foreMask" -- should take dff std to find the flashy area
                     roi(iRoi).label = 'full region';
+                    imgForRoi = mat2gray(std(epiStackMean(1).dff,[],3));
                 case 2
                     % Mask of background fluorescence levels
-                    % "bckMask"
+                    % "bckMask" -- should take mean of raw to find brighter bck
                     roi(iRoi).label = 'extravisual corticies';
+                    imgForRoi = mat2gray(sum(readTiffStackFolder(epiStackDir,1:10,'double'),3));
                 case 3
                     % Mask of a non gcamp region to test for LED artifacts
-                    % "testMask" 
+                    % "testMask" -- just look at raw signal mean
                     roi(iRoi).label = 'non-gcamp region';
+                    imgForRoi = mat2gray(sum(readTiffStackFolder(epiStackDir,1:10,'double'),3));
             end
             disp(['Select ',roi(iRoi).label '...']);
             [   roi(iRoi).x,...
                 roi(iRoi).y,...
                 roi(iRoi).bw,...
                 roi(iRoi).ix,...
-                roi(iRoi).iy    ] = roipoly(epiSampImage);
-            croppedRoi = epiSampImage.*roi(iRoi).bw;
-            imagesc(croppedRoi)
+                roi(iRoi).iy    ] = roipoly(imgForRoi);
+            croppedRoi = imgForRoi.*roi(iRoi).bw;
             pause(.5)
         end
         % Save ROIs
@@ -256,6 +256,10 @@ if processEpiRois
                     end
                     f0 = mean(f0);
 
+                    % Get the background signal
+                    fBck = zeros(numel(fFrameNums),1);
+                    
+                    
                     % store dff and f0 in a HUGE struct
                     dff = zeros(numel(fFrameNums),1);
                     f   = zeros(numel(fFrameNums),1);
@@ -306,5 +310,3 @@ elseif ~exist('dff','var')
     fprintf('Loading epi dff: %s\n',fullfile(procDir,'epiTrace.mat'));
     load(fullfile(procDir,'epiTrace.mat'))
 end
-
-
