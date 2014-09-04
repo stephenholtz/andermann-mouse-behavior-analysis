@@ -72,6 +72,7 @@ dffFramesPost = ceil(durPostSecs*frameNums.epiRate);
 
 % Save a little space and make troubleshooting easier with this anon func
 range2vec = @(v)(v(1):v(2));
+sum2 = @(M)(sum(0+M(:)));
 % Server doesn't have flip
 if ~exist('flip','builtin')
     flip = @(X,D)(flipdim(X,D));
@@ -257,14 +258,23 @@ if processEpiRois
                     f0 = mean(f0);
 
                     % Get the background and foreground signal
-                    fBck = zeros(numel(fFrameNums),1);
-                    fSig   = zeros(numel(fFrameNums),1);
+                    fBck = zeros(numel(fFrameNums),sum2(bckMask));
+                    fSig = zeros(numel(fFrameNums),sum2(foreMask));
+                    
                     iFrame = 1;
+                    iBck = 1;
+                    nBck = sum2(bckMask);
+                    iSig = 1;
+                    nSig = sum2(foreMask);
+                    
                     for f = fFrameNums
                         currFrame = epi(:,:,f);
-                        fBck(iFrame) = mean(currFrame(bckMask));
-                        fSig(iFrame) = mean(currFrame(foreMask));
+                        fBck(iFrame,iBck:(1+iBck+nBck)) = squeeze(currFrame(bckMask));
+                        fSig(iFrame,iSig:(1+iSig+nSig)) = squeeze(currFrame(foreMask));
+                        
                         iFrame = iFrame + 1;
+                        iSig = iSig + nSig;
+                        iBck = iBck + nBck;  
                     end
                     
                     % Get the noise first component from the two
