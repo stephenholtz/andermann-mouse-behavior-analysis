@@ -246,31 +246,36 @@ if processEpiRois
                     % Which frames will be used for calculating f0 and f
                     f0FrameNums = analStart:(ledStart-1);
                     fFrameNums = analStart:analEnd;
-
-
-
-                    % Get the background and foreground signal
-                    fBck = zeros(numel(fFrameNums),sum2(bckMask));
-                    fSig = zeros(numel(fFrameNums),sum2(foreMask));
                     
-                    iFrame = 1;
-                    iBck = 1;
-                    nBck = sum2(bckMask);
-                    iSig = 1;
-                    nSig = sum2(foreMask);
+                    % Get background and foreground signals
                     
-                    for f = fFrameNums
-                        currFrame = epi(:,:,f);
-                        fBck(iFrame,iBck:(iBck+nBck-1)) = squeeze(currFrame(bckMask))';
-                        fSig(iFrame,iSig:(iSig+nSig-1)) = squeeze(currFrame(foreMask))';
-                        
-                        iFrame = iFrame + 1;
-                        iSig = iSig + nSig;
-                        iBck = iBck + nBck;  
-                    end
-                    % Get the noise first component from the two
-                    [pcaCoeff,pcaScore] = pca([fBck fSig]');  
                     
+%                    % Get the background and foreground signal
+%                    fBck = zeros(numel(fFrameNums),sum2(bckMask));
+%                    fSig = zeros(numel(fFrameNums),sum2(foreMask));
+%                    
+%                    iFrame = 1;
+%                    iBck = 1;
+%                    iSig = 1;
+%                    nBck = sum2(bckMask);
+%                    nSig = sum2(foreMask);
+%                    
+%                    % This will require tweaking, (not sure it is set up
+%                    % correctly)
+%                     for f = fFrameNums
+%                         currFrame = epi(:,:,f);
+%                         fBck(iFrame,iBck:(iBck+nBck-1)) = squeeze(currFrame(bckMask))';
+%                         fSig(iFrame,iSig:(iSig+nSig-1)) = squeeze(currFrame(foreMask))';
+%                         
+%                         iFrame = iFrame + 1;
+%                         iSig = iSig + nSig;
+%                         iBck = iBck + nBck;  
+%                     end
+%                     
+%                     % Get the noise first component from the two
+%                     [pcaCoeff,pcaScore,pcaLat,pcaTsq,pcaExpl] = pca([fBck fSig]','VariableWeights','variance','NumComponents',3);  
+
+                     
                     % Get f0 with means
                     iFrame = 1;
                     f0 = zeros(numel(f0FrameNums),1);
@@ -280,8 +285,6 @@ if processEpiRois
                         iFrame = iFrame + 1;
                     end
                     f0 = mean(f0);
-                    
-
                      
                     % store dff and f0 in a HUGE struct
                     dff = zeros(numel(fFrameNums),1);
