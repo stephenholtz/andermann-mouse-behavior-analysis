@@ -247,15 +247,7 @@ if processEpiRois
                     f0FrameNums = analStart:(ledStart-1);
                     fFrameNums = analStart:analEnd;
 
-                    % Get f0 with means
-                    iFrame = 1;
-                    f0 = zeros(numel(f0FrameNums),1);
-                    for f = f0FrameNums
-                        currFrame = epi(:,:,f);
-                        f0(iFrame) = mean(currFrame(foreMask));
-                        iFrame = iFrame + 1;
-                    end
-                    f0 = mean(f0);
+
 
                     % Get the background and foreground signal
                     fBck = zeros(numel(fFrameNums),sum2(bckMask));
@@ -269,16 +261,27 @@ if processEpiRois
                     
                     for f = fFrameNums
                         currFrame = epi(:,:,f);
-                        fBck(iFrame,iBck:(1+iBck+nBck)) = squeeze(currFrame(bckMask));
-                        fSig(iFrame,iSig:(1+iSig+nSig)) = squeeze(currFrame(foreMask));
+                        fBck(iFrame,iBck:(iBck+nBck-1)) = squeeze(currFrame(bckMask))';
+                        fSig(iFrame,iSig:(iSig+nSig-1)) = squeeze(currFrame(foreMask))';
                         
                         iFrame = iFrame + 1;
                         iSig = iSig + nSig;
                         iBck = iBck + nBck;  
                     end
-                    
                     % Get the noise first component from the two
-                    [pcaCoeff,pcaScore] = pca([fBck' fSig']);
+                    [pcaCoeff,pcaScore] = pca([fBck fSig]');  
+                    
+                    % Get f0 with means
+                    iFrame = 1;
+                    f0 = zeros(numel(f0FrameNums),1);
+                    for f = f0FrameNums
+                        currFrame = epi(:,:,f);
+                        f0(iFrame) = mean(currFrame(foreMask));
+                        iFrame = iFrame + 1;
+                    end
+                    f0 = mean(f0);
+                    
+
                      
                     % store dff and f0 in a HUGE struct
                     dff = zeros(numel(fFrameNums),1);
