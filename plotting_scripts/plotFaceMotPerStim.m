@@ -56,9 +56,9 @@ end
 %% Common plotting variables
 saveFigs              = 1;
 % Make these plots
-plotLumped            = 1;
+plotLumped            = 0;
 plotLumpedComparisons = 1;
-plotPerStimMotDiff    = 1;
+plotPerStimMotDiff    = 0;
 
 % Use these analysis windows
 durPrevSecs   = .5;
@@ -69,7 +69,7 @@ motFramesPost = ceil(durPostSecs*frameNums.faceRate);
 totalMotFrames = motFramesPrev+motFramesDur+motFramesPost-10;
 
 axF = [0 2 -2 6];
-axZ = [.25 1.5 -1 5];
+axZ = [.25 1.95 -1.5 2];
 
 %----------------------------------------------------------------------
 %% Combine Stimuli across entire experiment (different stimSets)
@@ -227,7 +227,7 @@ if plotLumped
             ylabel(yLabel)
             xlabel(xLabel)
             title(titleStr)
-
+            box off
             axis(axF);
 
             if saveFigs
@@ -287,8 +287,8 @@ if plotLumpedComparisons
         title(titleStr)
         setLegNames{end+1} = 'Stim On/Off';
         lH = legend(setLegNames);
-
-        axis(axF);
+        box off
+        axis(axZ);
 
         if saveFigs
             figSaveName = fullfile(figDir,['faceMot_compare' roi(iRoi).label '_' procType '_' [setNames{:}] ]);
