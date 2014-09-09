@@ -37,8 +37,8 @@ experimentName  = '20140902_01';
 % Process only some of files
 processEyeFiles     = 0;
 processFaceFiles    = 0;
-processEpiFiles     = 1;
-processNidaqData    = 0;
+processEpiFiles     = 0;
+processNidaqData    = 1;
 
 %% Establish base filepaths
 

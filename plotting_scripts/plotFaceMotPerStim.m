@@ -6,7 +6,7 @@
 
 %% Set up filepaths / load processed data 
 animalName  = 'K51';
-expDateNum  = '20140830_02';
+expDateNum  = '20140902_01';
 
 % Get the base location for data, see function for details
 if ispc
@@ -39,128 +39,144 @@ if ~exist('daq','var')
     load(nidaqFilePath);
     fprintf(' done\n')
 end
+if ~exist('faceMotion','var')
+    load(fullfile(procDir,'faceMotion.mat'));
+end
+if ~exist('frameNums','var')
+    load(fullfile(procDir,'frameNums.mat'));
+end
+if ~exist('stimTsInfo','var')
+    load(fullfile(procDir,'stimTsInfo.mat'));
+end
+if ~exist('roi','var')
+    load(fullfile(procDir,'faceROIs.mat'));
+end
 
-load(fullfile(procDir,'faceMotion.mat'));
-load(fullfile(procDir,'frameNums.mat'));
-load(fullfile(procDir,'stimTsInfo.mat'));
 
 %% Common plotting variables
 saveFigs              = 1;
-
 % Make these plots
 plotLumped            = 1;
 plotLumpedComparisons = 1;
 plotPerStimMotDiff    = 1;
 
 % Use these analysis windows
-stimTimeSec            = stim.durOn;
-preStimTimeSec         = .25;
-preStimTimeSamps       = daq.daqRate*preStimTimeSec;
-postStimTimeSec        = .25;
-postStimTimeSamps      = daq.daqRate*postStimTimeSec;
-nReliableFrames        = floor(frameNums.faceRate*(preStimTimeSec+postStimTimeSec+stimTimeSec) - 6);
-nReliablePreStimFrames = floor(frameNums.faceRate*(preStimTimeSec) - 6);
+durPrevSecs   = .5;
+durPostSecs   = 1;
+motFramesDur = ceil(stim.durOn*frameNums.faceRate);
+motFramesPrev = ceil(durPrevSecs*frameNums.faceRate);
+motFramesPost = ceil(durPostSecs*frameNums.faceRate);
+totalMotFrames = motFramesPrev+motFramesDur+motFramesPost-10;
+
+axF = [0 2 -2 6];
+axZ = [.25 1.5 -1 5];
 
 %----------------------------------------------------------------------
 %% Combine Stimuli across entire experiment (different stimSets)
 [nBlocks,nStims,nReps] = size(stimTsInfo.all);
-for iStim = 1:6
-    iRoi = 1;
-    rowIter = 1;
-    for iBlock = 1:nBlocks
-        for iRep = 1:nReps
-            stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
-            stimOnsetInd = stimDaqBounds(1);
-            stimOffsetInd = stimDaqBounds(2);
-            % Get the daq timeseries ind where this stimulus started (minus prestimtime)
-            startDaqInd = stimOnsetInd - preStimTimeSamps;
-            % Get the frame number of that starting daq ind
-            startFrameInd = frameNums.face(startDaqInd);
-            % Determine ending daq point
-            endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
-            endFrameInd = frameNums.face(endDaqInd);
-
-            % Number of frames is somewhat unreliable, truncate all to same length
-            framesToUse = startFrameInd:endFrameInd;
-            framesToUse = framesToUse(1:nReliableFrames);
-
-            % Use the abs motion vector, (x^2 + y^2)^(1/2)
-            x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
-            y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
-            absMotion = sqrt(x.^2 + y.^2);
-            motionTs.('noSub').all{iStim}(rowIter,:) = absMotion;
-            motionTs.('baseSub').all{iStim}(rowIter,:) = absMotion - median(absMotion(1:nReliablePreStimFrames));
-
-            rowIter = rowIter + 1;
-        end
-    end
-end
-for stimSet = 1:6
-    switch stimSet
-        case 1
-            stimsToUse = 1:6;
-            setName = 'all';
-        case 2
-            stimsToUse = [1 2 4 5];
-            setName = 'allVis';     
-        case 3
-            stimsToUse = 3;
-            setName = 'blank';        
-        case 4
-            stimsToUse = 6;
-            setName = 'ledOnly';
-        case 5
-            stimsToUse = [1 2];
-            setName = 'ledOffVis';        
-        case 6
-            stimsToUse = [4 5];
-            setName = 'ledOnVis';
-        case 7
-            stimsToUse = 1;
-            setName = 'medStimLedOff';
-        case 8
-            stimsToUse = 2;
-            setName = 'latStimLedOff';
-        case 9
-            stimsToUse = 4;
-            setName = 'medStimLedOn';
-        case 10
-            stimsToUse = 5;
-            setName = 'latStimLedOn';
-    end
-
-    iRoi = 1;
-    rowIter = 1;
-    for iBlock = 1:nBlocks
-        for iStim = stimsToUse
+clear motion motionTs
+for iStim = 1:4
+    for iRoi = 1:5;
+        rowIter = 1;
+        for iBlock = 1:(nBlocks-12)
             for iRep = 1:nReps
-                stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
-                stimOnsetInd = stimDaqBounds(1);
-                stimOffsetInd = stimDaqBounds(2);
-                % Get the daq timeseries ind where this stimulus started (minus prestimtime)
-                startDaqInd = stimOnsetInd - preStimTimeSamps;
-                % Get the frame number of that starting daq ind
-                startFrameInd = frameNums.face(startDaqInd);
-                % Determine ending daq point
-                endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
-                endFrameInd = frameNums.face(endDaqInd);
+                ledDaqInds = stimTsInfo.all(iBlock,iStim,iRep).led;
+                ledStart   = frameNums.face(ledDaqInds(1));
+                ledEnd     = frameNums.face(ledDaqInds(2));
+
+                ptbDaqInds = stimTsInfo.all(iBlock,iStim,iRep).ptb;
+                ptbStart   = frameNums.face(ptbDaqInds(1));
+                ptbEnd     = frameNums.face(ptbDaqInds(2));
+
+                % establish analysis area around led
+                analStart = ledStart - motFramesPrev;
+                analEnd   = ledEnd + motFramesPost;
+
+                motionTs(iRoi).all(rowIter,:).ptbOnOff = [(ptbStart - analStart) (ptbEnd - analStart)];
+                motionTs(iRoi).all(rowIter,:).ledOnOff = [(ledStart - analStart) (ledEnd - analStart)];
 
                 % Number of frames is somewhat unreliable, truncate all to same length
-                framesToUse = startFrameInd:endFrameInd;
-                framesToUse = framesToUse(1:nReliableFrames);
+                framesToUse = analStart:analEnd;
+                framesToUse = framesToUse(end-totalMotFrames+1:end);
 
                 % Use the abs motion vector, (x^2 + y^2)^(1/2)
                 x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
                 y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
                 absMotion = sqrt(x.^2 + y.^2);
-                motionTs.('noSub').(setName)(rowIter,:) = absMotion;
-                motionTs.('baseSub').(setName)(rowIter,:) = absMotion - median(absMotion(1:nReliablePreStimFrames));
+                motionTs(iRoi).('noSub').all{iStim}(rowIter,:) = absMotion;
+                motionTs(iRoi).('baseSub').all{iStim}(rowIter,:) = absMotion - median(absMotion(1:motFramesPrev));
 
                 rowIter = rowIter + 1;
             end
         end
     end
 end
+for stimSet = 1:6
+    switch stimSet
+        case 1
+            stimsToUse = [1 3];
+            setName = 'vis';
+        case 2
+            stimsToUse = [2 4];
+            setName = 'blank';     
+        case 3
+            stimsToUse = 2;
+            setName = 'blankLedOff';        
+        case 4
+            stimsToUse = 4;
+            setName = 'blankLedOn';
+        case 5
+            stimsToUse = 1;
+            setName = 'medStimLedOff';
+        case 6
+            stimsToUse = 3;
+            setName = 'medStimLedOn';
+    end
+
+    for iRoi = 1:5
+        rowIter = 1;
+        for iBlock = 1:(nBlocks-12)
+            for iStim = stimsToUse
+                for iRep = 1:nReps
+                    ledDaqInds = stimTsInfo.all(iBlock,iStim,iRep).led;
+                    ledStart   = frameNums.face(ledDaqInds(1));
+                    ledEnd     = frameNums.face(ledDaqInds(2));
+
+                    ptbDaqInds = stimTsInfo.all(iBlock,iStim,iRep).ptb;
+                    ptbStart   = frameNums.face(ptbDaqInds(1));
+                    ptbEnd     = frameNums.face(ptbDaqInds(2));
+
+                    % establish analysis area around led
+                    analStart = ledStart - motFramesPrev;
+                    analEnd   = ledEnd + motFramesPost;
+
+                    motionTs(iRoi).(setName)(rowIter,:).ptbOnOff = [(ptbStart - analStart) (ptbEnd - analStart)];
+                    motionTs(iRoi).(setName)(rowIter,:).ledOnOff = [(ledStart - analStart) (ledEnd - analStart)];
+
+                    % Number of frames is somewhat unreliable, truncate all to same length
+                    framesToUse = analStart:analEnd;
+                    framesToUse = framesToUse(end-totalMotFrames+1:end);
+
+                    % Use the abs motion vector, (x^2 + y^2)^(1/2)
+                    x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
+                    y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
+                    absMotion = sqrt(x.^2 + y.^2);
+                    motionTs(iRoi).('noSub').(setName)(rowIter,:) = absMotion;
+                    motionTs(iRoi).('baseSub').(setName)(rowIter,:) = absMotion - mean(absMotion(1:motFramesPrev));
+
+                    rowIter = rowIter + 1;
+                end
+            end
+        end
+    end
+end
+
+nTotalFrames = 138;
+stm=[motionTs(1).all.ptbOnOff];
+led=[motionTs(1).all.ledOnOff];
+xPosStim = [min((stm(1:2:end))) min((stm(2:2:end)))];
+xPosLed =  [min((led(1:2:end))) min((led(2:2:end)))];
+clear stm led
 
 %----------------------------------------------------------------------
 %% Plot the combined stimulus motion responses
@@ -169,124 +185,116 @@ end
 %procType = 'noSub';
 procType = 'baseSub';
 if plotLumped
-    % These should be the same for all plots
-    xTsVector = (1:size(motionTs.(procType).all,2))/camFrameRate;
-    onsetSeconds = 1;
-    offsetSeconds = 2;
-    yLabel = 'Pixel Shift';
-    xLabel = 'Time (s)';
+    for iRoi = 1:5
+        % These should be the same for all plots
+        tVec = (1:size(motionTs(iRoi).(procType).vis,2))/frameNums.faceRate;
+        yLabel = 'Pixel Shift';
+        xLabel = 'Time (s)';
 
-    for stimSet = 1:6
-        switch stimSet
-            case 1
-                setName = 'all';
-                titleStr = ({'Facial motion across all stimuli', '(blank conditions included'});
-            case 2
-                setName = 'allVis';     
-                titleStr = ({'Facial motion across all visual stimuli', '(no blank conditions)'});
-            case 3
-                setName = 'blank';        
-                titleStr = ({'Facial motion across all blank stimuli', ''});
-            case 4
-                setName = 'ledOnly';
-                titleStr =({'Facial motion to LED Only',''});
-            case 5
-                setName = 'ledOffVis';        
-                titleStr =({'Facial motion to visual stimuli LED Off',''});
-            case 6
-                setName = 'ledOnVis';
-                titleStr =({'Facial motion to visual stimuli LED On',''});
-            case 7
-                setName = 'medStimLedOff';
-                titleStr =({'Facial motion to medial visual stimuli LED off',''});
-            case 8
-                setName = 'latStimLedOff';
-                titleStr =({'Facial motion to lateral visual stimuli LED off',''});
-            case 9
-                setName = 'medStimLedOn';
-                titleStr =({'Facial motion to medial visual stimuli LED On',''});
-            case 10 
-                setName = 'latStimLedOn';
-                titleStr =({'Facial motion to lateral visual stimuli LED On',''});
+        for stimSet = 1:6
+            switch stimSet
+                case 1
+                    setName = 'vis';
+                    titleStr = ({'Facial motion to vis stim'});
+                case 2
+                    setName = 'blank';     
+                    titleStr = ({'Facial motion to blank stim'});
+                case 3
+                    setName = 'blankLedOff';        
+                    titleStr = ({'Facial motion to blank stim LED off'});
+                case 4
+                    setName = 'blankLedOn';
+                    titleStr = ({'Facial motion to blank stim LED on'});
+                case 5
+                    setName = 'medStimLedOff';
+                    titleStr = ({'Facial motion to vis stim LED off'});
+                case 6
+                    setName = 'medStimLedOn';
+                    titleStr = ({'Facial motion to vis stim LED on'});
+            end
+            titleStr{2} = roi(iRoi).label;
+
+            figure();
+            plot(tVec,motionTs(iRoi).(procType).(setName));
+            hold all
+                plot([tVec(xPosLed(1)) tVec(xPosLed(1))],ylim,'Color','b','linestyle','--','linewidth',2);
+                plot([tVec(xPosLed(2)) tVec(xPosLed(2))],ylim,'Color','b','linestyle','--','linewidth',2);
+                plot([tVec(xPosStim(1)) tVec(xPosStim(1))],ylim,'Color','k','linestyle','--','linewidth',2);
+                plot([tVec(xPosStim(2)) tVec(xPosStim(2))],ylim,'Color','k','linestyle','--','linewidth',2);
+            %plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
+            %plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
+            plot(tVec,mean(motionTs(iRoi).(procType).(setName)),'LineWidth',3,'Color','k');
+            ylabel(yLabel)
+            xlabel(xLabel)
+            title(titleStr)
+
+            axis(axF);
+
+            if saveFigs
+                figSaveName = fullfile(figDir,['faceMot_' roi(iRoi).label '_' procType '_' setName '_' animalName '_' expDateNum]);
+                export_fig(gcf,figSaveName,'-pdf',gcf)
+            end 
         end
-
-        figure();
-        plot(xTsVector,motionTs.(procType).(setName));
-        hold all
-        plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
-        plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
-        plot(xTsVector,mean(motionTs.(procType).(setName)),'LineWidth',3,'Color','k');
-        ylabel(yLabel)
-        xlabel(xLabel)
-        title(titleStr)
-        if saveFigs
-            figSaveName = fullfile(figDir,['faceMot_' procType '_' setName '_' animalName '_' expDateNum]);
-            export_fig(gcf,figSaveName,'-pdf',gcf)
-        end 
     end
 end
 
 %----------------------------------------------------------------------
 %% Plot comparisons of averaged motion responses
 if plotLumpedComparisons
+    for iRoi = 1:5
     % These should be the same for all plots
-    xTsVector = (1:size(motionTs.(procType).all,2))/camFrameRate;
-    onsetSeconds = 1;
-    offsetSeconds = 2;
+    tVec = (1:size(motionTs(iRoi).(procType).vis,2))/frameNums.faceRate;
     yLabel = 'Pixel Shift';
     xLabel = 'Time (s)';
     for comparisonType = 1:4
         switch comparisonType
             case 1
-                setName1 = 'allVis';
-                setName2 = 'blank';
-                titleStr = {'All visual vs blank stimuli'};
-                setLegName1 = 'All Visual Stimuli';
-                setLegName2 = 'Blank Stimuli';
+                setNames = {'blankLedOff','blankLedOn','medStimLedOff','medStimLedOn'};
+                titleStr = {'All Conditions'};
+                setLegNames = setNames;
             case 2
-                setName1 = 'ledOnly';
-                setName2 = 'blank';
-                titleStr = {'Only LED vs blank stimuli'};
-                setLegName1 = 'LED Only';
-                setLegName2 = 'Blank Stimuli';
+                setNames = {'blankLedOff','blankLedOn'};
+                titleStr = {'Blank Comparison'};
+                setLegNames = setNames;
             case 3
-                setName1 = 'ledOffVis';
-                setName2 = 'ledOnVis';
-                titleStr = {'Facial motion with LED off vs LED on'};
-                setLegName1 = 'LED Off Vis Stim';
-                setLegName2 = 'LED On Vis Stim';
+                setNames = {'medStimLedOff','medStimLedOn'};
+                titleStr = {'Vis Comparison'};
+                setLegNames = setNames;
             case 4
-                setName1 = 'medStimLedOff';
-                setName2 = 'latStimLedOff';
-                titleStr = {'Facial motion medial vs lateral stim w/LED on'};
-                setLegName1 = 'LED Off Med Vis Stim';
-                setLegName2 = 'LED Off Lat Vis Stim';
-            case 5
-                setName1 = 'medStimLedOn';
-                setName2 = 'latStimLedOn';
-                titleStr = {'Facial motion medial vs lateral stim w/LED on'};
-                setLegName1 = 'LED On Med Vis Stim';
-                setLegName2 = 'LED On Lat Vis Stim';
+                setNames = {'vis','blank'};
+                titleStr = {'All Vis vs All Blank'};
+                setLegNames = setNames;
         end
+        titleStr{2} = roi(iRoi).label;
         
         figure();
-        plot(xTsVector,mean(motionTs.(procType).(setName1)),'LineWidth',3);
-        hold all
-        plot(xTsVector,mean(motionTs.(procType).(setName2)),'LineWidth',3);
+        for i = 1:numel(setNames)
+            plot(tVec,mean(motionTs(iRoi).(procType).(setNames{i})),'LineWidth',3);
+            hold all
+        end
+
         % Terrible hack to get correct ylim
-        plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
-        plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
-        plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
-        plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
+                plot([tVec(xPosLed(1)) tVec(xPosLed(1))],ylim,'Color','b','linestyle','--','linewidth',2);
+                plot([tVec(xPosLed(2)) tVec(xPosLed(2))],ylim,'Color','b','linestyle','--','linewidth',2);
+                plot([tVec(xPosStim(1)) tVec(xPosStim(1))],ylim,'Color','k','linestyle','--','linewidth',2);
+                plot([tVec(xPosStim(2)) tVec(xPosStim(2))],ylim,'Color','k','linestyle','--','linewidth',2);
+%        plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
+%        plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
+%        plot([onsetSeconds onsetSeconds],ylim,'lineWidth',3,'Color','G')
+%        plot([offsetSeconds offsetSeconds],ylim,'lineWidth',3,'Color','G')
         ylabel(yLabel)
         xlabel(xLabel)
         title(titleStr)
-        lH = legend(setLegName1,setLegName2,'stimulus on/off');
+        setLegNames{end+1} = 'Stim On/Off';
+        lH = legend(setLegNames);
+
+        axis(axF);
 
         if saveFigs
-            figSaveName = fullfile(figDir,['faceMot_compare' procType '_' setName1 '_vs' setName2 '_' animalName '_' expDateNum]);
+            figSaveName = fullfile(figDir,['faceMot_compare' roi(iRoi).label '_' procType '_' [setNames{:}] ]);
             export_fig(gcf,figSaveName,'-pdf',gcf)
         end
+    end
     end
 end
 
@@ -294,40 +302,45 @@ end
 %% Calculate reponses in a window after stimulus onset (wrt baseline)
 procType = 'baselineSub';
 moct = 'median';
-postStimRespWindowMs = 250;
-nFramesRespWindow = floor(postStimRespWindowMs/1000*camFrameRate) - 2;
+postStimRespWindowMs = 200;
+nFramesRespWindow = floor(postStimRespWindowMs/1000*frameNums.faceRate) - 2;
 rowIter = 1;
-for iBlock = 1:nBlocks
+for iBlock = 1:(nBlocks-12)
     % New col for each stimulus rep / type (should be 1:18)
     colIter = 1;
-    for iStim = 1:6
+    for iStim = 1:4
         for iRep = 1:nReps
-                stimDaqBounds = stimTsInfo.all(iBlock,iStim,iRep).led;
-                stimOnsetInd = stimDaqBounds(1);
-                stimOffsetInd = stimDaqBounds(2);
-                % Get the daq timeseries ind where this stimulus started (minus prestimtime)
-                startDaqInd = stimOnsetInd - preStimTimeSamps;
-                % Get the frame number of that starting daq ind
-                startFrameInd = frameNums.face(startDaqInd);
-                % Determine ending daq point
-                endDaqInd = stimOnsetInd + stimTimeSec*daq.daqRate + postStimTimeSamps;
-                endFrameInd = frameNums.face(endDaqInd);
+                ledDaqInds = stimTsInfo.all(iBlock,iStim,iRep).led;
+                ledStart   = frameNums.face(ledDaqInds(1));
+                ledEnd     = frameNums.face(ledDaqInds(2));
+
+                ptbDaqInds = stimTsInfo.all(iBlock,iStim,iRep).ptb;
+                ptbStart   = frameNums.face(ptbDaqInds(1));
+                ptbEnd     = frameNums.face(ptbDaqInds(2));
+
+                % establish analysis area around led
+                analStart = ledStart - motFramesPrev;
+                analEnd   = ledEnd + motFramesPost;
+
+                motionTs(iRoi).all(rowIter,:).ptbOnOff = [(ptbStart - analStart) (ptbEnd - analStart)];
+                motionTs(iRoi).all(rowIter,:).ledOnOff = [(ledStart - analStart) (ledEnd - analStart)];
 
                 % Number of frames is somewhat unreliable, truncate all to same length
-                framesToUse = stimOnFrameInd:(stimOnFrameInd+nFramesRespWindow);
-                preFramesToUse = (stimOnFrameInd-nReliablePreStimFrames):stimOnFrameInd; 
+                framesToUse = analStart:analEnd;
+                framesToUse = framesToUse(end-totalMotFrames+1:end);
 
                 % Use the abs motion vector, (x^2 + y^2)^(1/2)
                 x = faceMotion.stackRegCell{iRoi}(framesToUse,4);
                 y = faceMotion.stackRegCell{iRoi}(framesToUse,3); 
                 absPostMotion = sqrt(x.^2 + y.^2);
+
+                preFramesToUse = analStart:ledStart;
                 x = faceMotion.stackRegCell{iRoi}(preFramesToUse,4);
                 y = faceMotion.stackRegCell{iRoi}(preFramesToUse,3); 
                 absPreMotion = sqrt(x.^2 + y.^2);
-                %motion.(setName)(rowIter,:) = absMotion;
-                motion.(setName)(rowIter,colIter) = median(absPreMotion) - median(absPostMotion);
 
-            motion.(moct)(rowIter,colIter) = median(faceMotion.stackRegCell(framesToUse,4)) - median(faceMotion.stackRegCell(preStimFrames,4));
+                motion(iRoi).(setName)(rowIter,colIter) = median(absPreMotion) - median(absPostMotion);
+                motion(iRoi).(moct)(rowIter,colIter) = median(faceMotion.stackRegCell{iRoi}(framesToUse,4)) - median(faceMotion.stackRegCell{iRoi}(preFramesToUse,4));
             colIter = colIter + 1;
         end
     end
@@ -337,28 +350,29 @@ end
 %----------------------------------------------------------------------
 %% Plot responses in window pre vs post 
 if plotPerStimMotDiff
-    moct = 'median';
-    % These should be the same for all plots
-    yLabel = {'Median Diff Pixel Shift','Pre vs 250ms Post Stimulus Onset'};
-    xLabel = 'Stimulus Type';
-    titleStr = 'Difference in motion across all block repetitions';
-    figure();
-    plot(motion.(moct)')
-    hold all
-    plot(mean(motion.(moct)),'LineWidth',3,'Color','k');
-    ylabel(yLabel)
-    xlabel(xLabel)
-    set(gca,'Xtick',1:18)
-    set(gca,'XtickLabel',{'1','1','1','2','2','2','3','3','3','1-LED','1-LED','1-LED','2-LED','2-LED','2-LED','3-LED','3-LED','3-LED'});
-    try
-        set(gca,'XTickLabelRotation',45)
-    catch
-        warning('Tick rotation not supported')
+    for iRoi = 1:5
+        moct = 'median';
+        % These should be the same for all plots
+        yLabel = {'Median Diff Pixel Shift','Pre vs 250ms Post Stimulus Onset'};
+        xLabel = 'Stimulus Type';
+        titleStr = 'Difference in motion across all block repetitions';
+        figure();
+        plot(motion(iRoi).(moct)')
+        hold all
+        plot(mean(motion(iRoi).(moct)),'LineWidth',3,'Color','k');
+        ylabel(yLabel)
+        xlabel(xLabel)
+        set(gca,'Xtick',1:16)
+        set(gca,'XtickLabel',{'M','M','M','M','B','B','B','B','M+LED','M+LED','M+LED','M+LED','B+LED','B+LED','B+LED','B+LED'});
+        try
+            set(gca,'XTickLabelRotation',45)
+        catch
+            warning('Tick rotation not supported')
+        end
+        title(titleStr)
+        if saveFigs
+            figSaveName = fullfile(figDir,['face_mot_diff_' roi(iRoi).label '_' procType '_'  animalName '_' expDateNum]);
+            export_fig(gcf,figSaveName,'-pdf',gcf)
+        end 
     end
-    title(titleStr)
-    if saveFigs
-        figSaveName = fullfile(figDir,['all_stimuli_median_response_diff_' procType '_'  animalName '_' expDateNum]);
-        export_fig(gcf,figSaveName,'-pdf',gcf)
-    end 
 end
-

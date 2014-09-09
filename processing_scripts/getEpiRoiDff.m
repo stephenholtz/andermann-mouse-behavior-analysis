@@ -12,9 +12,6 @@
 animalName = 'K51';
 expDateNum = '20140902_01';
 
-% makes a set of stacks with dffs for troubleshooting
-makeEpiDffStacks = 0;
-
 % do ROI analysis (makeNewRois and makeRoiDffTraces require this)
 processEpiRois = 1;
 % make new ROIs
@@ -65,7 +62,7 @@ nPostLedToss = 3;
 
 % For analysis / plots use this amount before and after LED on/off
 durPrevSecs   = .5;
-durPostSecs   = .5;
+durPostSecs   = 1;
 dffFramesPrev = ceil(durPrevSecs*frameNums.epiRate);
 dffFramesPost = ceil(durPostSecs*frameNums.epiRate);
 [nBlocks,nStims,nReps] = size(stimTsInfo.all);
@@ -73,102 +70,19 @@ dffFramesPost = ceil(durPostSecs*frameNums.epiRate);
 % Save a little space and make troubleshooting easier with this anon func
 range2vec = @(v)(v(1):v(2));
 sum2 = @(M)(sum(0+M(:)));
-% Server doesn't have flip
+
+% Server doesn't have flip (older ver is flipdim)
 if ~exist('flip','builtin')
     flip = @(X,D)(flipdim(X,D));
 end
-ledCh = 1;
 
 %% Do / save epi analysis (ROI and DFF)
-
 % Load in the full stack if it isn't already in memory
 if ~exist('epi','var')
     fprintf('Loading all epi stacks...\n');
     % My version of read tiff folder, doesn't total progress indicator...
     epi = readTiffStackFolder(epiStackDir,inf,'double');
 end
-
-%% Make a stack of the dff responses for each stimulus
-% Largely for troubleshooting 
-if makeEpiDffStacks
-    fprintf('Making Epi Dff stacks\nBlock: ');
-    for iB = 1:nBlocks
-        fprintf('%2.f ',iB);
-        for iS = 1:nStims
-            for iR = 1:nReps
-                % place safe bounds around when the LED stim is likely
-                % contaminating the image
-                ledDaqInds = stimTsInfo.all(iB,iS,iR).led;
-                ledStart   = frameNums.epi(ledDaqInds(1)) - nPreLedToss;
-                ledEnd     = frameNums.epi(ledDaqInds(2)) + nPostLedToss;
-
-                % establish analysis area around led
-                analStart = ledStart - dffFramesPrev;
-                analEnd   = ledEnd + dffFramesPost;
-
-                % Which frames will be used for calculating f0
-                f0FrameNums = analStart:(ledStart-1);
-                f0Frame = mean(epi(:,:,f0FrameNums),3);
-
-                % store dff and f0 in a HUGE struct
-                fFrameNums = analStart:analEnd;
-                dff = zeros(size(epi,1),size(epi,2),numel(fFrameNums));
-                iFrame = 1;
-                for f = fFrameNums
-                    dff(:,:,iFrame) = (epi(:,:,f)./f0Frame)-1;
-                    iFrame = iFrame + 1; 
-                end
-                epiStack(iB,iS,iR).dff = dff;
-                epiStack(iB,iS,iR).f0 = f0Frame;
-            end
-        end
-    end
-    clear dff
-    fprintf('\n')
-    % Calculate means now and save as separate var for quick loading
-    % easiest way: one for each stimulus type
-    clear flipStimStack
-    fprintf('Making Mean Epi Dff stacks\nStim: ');
-    for iS = 1:nStims
-        fprintf('%2.f ',iS);
-        iTS = 1;
-        for iB = 1:nBlocks
-            for iR = 1:numel(epiStack(iB,iS,:))
-                % All dff have the same number of frames AFTER the LED
-                % align them so that they all end together, using flip (later unflip)
-                % This temporary variable is a 4-d matrix with 1=rows,2=cols,3=timeseries,4=timeseries reps
-                flippedStack = flip(epiStack(iB,iS,iR).dff,3);
-                flipStimStack(:,:,1:size(flippedStack,3),iTS) = flippedStack;
-                iTS = iTS + 1;
-            end
-        end
-        % Unflip the data align all by ending and then take the mean along the reps (4th dim)
-        % take the average and store in epiStackMean struct
-        epiStackMean(iS).dff = (mean(flip(flipStimStack,3),4));
-        clear flipStimStack
-    end
-    fprintf('\n')
-
-    fprintf('Saving mean epi dff stacks in: %s\n',fullfile(procDir,'epiStackMean.mat'));
-    save(fullfile(procDir,'epiStackMean.mat'),'epiStackMean','-v7.3');
-
-    % Save a sample of the dffs so I don't need to load in the epi file every time
-    epiStack = epiStack(2,:,:);
-    fprintf('Saving sample epi dff stacks in: %s\n',fullfile(procDir,'epiStack.mat'));
-    save(fullfile(procDir,'epiStack.mat'),'epiStack','-v7.3');
-
-    % Show a few videos to get the ROI right
-    showMov = 1;
-    if showMov
-        iS = 1;
-        for iF= 1:size(epiStackMean(iS).dff,3)
-            imshow(epiStackMean(iS).dff(:,:,iF));
-            pause(.1)
-        end
-    end
-
-end
-
 
 if processEpiRois
 %% Image info / ROIs
@@ -239,6 +153,10 @@ if processEpiRois
                     ledStart   = frameNums.epi(ledDaqInds(1)) - nPreLedToss;
                     ledEnd     = frameNums.epi(ledDaqInds(2)) + nPostLedToss;
 
+                    ptbDaqInds = stimTsInfo.all(iB,iS,iR).ptb;
+                    ptbStart   = frameNums.epi(ptbDaqInds(1));
+                    ptbEnd     = frameNums.epi(ptbDaqInds(2));
+
                     % establish analysis area around led
                     analStart = ledStart - dffFramesPrev;
                     analEnd   = ledEnd + dffFramesPost;
@@ -246,65 +164,58 @@ if processEpiRois
                     % Which frames will be used for calculating f0 and f
                     f0FrameNums = analStart:(ledStart-1);
                     fFrameNums = analStart:analEnd;
-                    
-                    % Get background and foreground signals
-                    
-                    
-%                    % Get the background and foreground signal
-%                    fBck = zeros(numel(fFrameNums),sum2(bckMask));
-%                    fSig = zeros(numel(fFrameNums),sum2(foreMask));
-%                    
-%                    iFrame = 1;
-%                    iBck = 1;
-%                    iSig = 1;
-%                    nBck = sum2(bckMask);
-%                    nSig = sum2(foreMask);
-%                    
-%                    % This will require tweaking, (not sure it is set up
-%                    % correctly)
-%                     for f = fFrameNums
-%                         currFrame = epi(:,:,f);
-%                         fBck(iFrame,iBck:(iBck+nBck-1)) = squeeze(currFrame(bckMask))';
-%                         fSig(iFrame,iSig:(iSig+nSig-1)) = squeeze(currFrame(foreMask))';
-%                         
-%                         iFrame = iFrame + 1;
-%                         iSig = iSig + nSig;
-%                         iBck = iBck + nBck;  
-%                     end
-%                     
-%                     % Get the noise first component from the two
-%                     [pcaCoeff,pcaScore,pcaLat,pcaTsq,pcaExpl] = pca([fBck fSig]','VariableWeights','variance','NumComponents',3);  
 
-                     
-                    % Get f0 with means
-                    iFrame = 1;
+                     % Get f0 with background subtracted out
                     f0 = zeros(numel(f0FrameNums),1);
+                    iFrame = 1;
+
                     for f = f0FrameNums
                         currFrame = epi(:,:,f);
                         f0(iFrame) = mean(currFrame(foreMask));
                         iFrame = iFrame + 1;
                     end
-                    f0 = mean(f0);
-                     
-                    % store dff and f0 in a HUGE struct
-                    dff = zeros(numel(fFrameNums),1);
+                    f0 = median(f0);
+                    
+                    % Get the background and foreground signal (separately for troubleshooting)
+                    fSig = zeros(numel(fFrameNums),1);
+                    fBck = zeros(numel(fFrameNums),1);
                     iFrame = 1;
+
                     for f = fFrameNums
                         currFrame = epi(:,:,f);
-                        dff(iFrame) = (mean(currFrame(foreMask))-median(currFrame(bckMask)))./(f0-median(currFrame(bckMask))) - 1;
-                        iFrame = iFrame + 1; 
+                        fBck(iFrame) = median(currFrame(bckMask));
+                        fSig(iFrame) = median(currFrame(foreMask));
+                        iFrame = iFrame + 1;
+                    end
+                    
+                    % store dff and f0 in a HUGE struct
+                    dff = zeros(numel(fFrameNums),1);
+                    bckdff = zeros(numel(fFrameNums),1);
+                    for iF = 1:numel(fSig)  
+                        dff(iF) = (fSig(iF)-f0)/f0;
+                        bckdff(iF) = (fBck(iF)-f0)/f0;
                     end
 
-                    epiTrace(iB,iS,iR).dff = dff;
-                    epiTrace(iB,iS,iR).f0 = f0;
-                    epiTrace(iB,iS,iR).iLedOn = dffFramesPrev;
-                    epiTrace(iB,iS,iR).iLedOff = numel(dff) - dffFramesPost;
+                    % add in baseline shift, subtract out background
+                    % TODO: clean this up after testing
+                    dff = dff - median(dff(1:numel(f0FrameNums)));
+                    bckdff = bckdff - median(bckdff(1:numel(f0FrameNums)));
+                    dff = dff-bckdff;
+                    dff = dff - median(dff(1:numel(f0FrameNums)));
 
-                    % Which frames will be used for calculating f0
-                    epiTrace(iB,iS,iR).f0Frames = f0FrameNums;
-                    epiTrace(iB,iS,iR).fFrames = fFrameNums;
+                    epiTrace(iB,iS,iR).dff  = dff;
+                    epiTrace(iB,iS,iR).f0   = f0;
+                    epiTrace(iB,iS,iR).fSig = fSig;
+                    epiTrace(iB,iS,iR).fBck = fBck;
 
-                    % Save all this for exhaustive troubleshooting
+                    % For easy plotting
+                    epiTrace(iB,iS,iR).ptbOnOff = [(ptbStart - analStart) (ptbEnd - analStart)];
+                    epiTrace(iB,iS,iR).ledOnOff = [(ledStart - analStart) (ledEnd - analStart)];
+
+                    % Save all this other stuff for exhaustive troubleshooting
+                    epiTrace(iB,iS,iR).f0Frames    = f0FrameNums;
+                    epiTrace(iB,iS,iR).fFrames     = fFrameNums;
+
                     daqLedStart  = find(frameNums.epi == ledStart,1,'first');
                     daqLedEnd    = find(frameNums.epi == ledEnd,1,'last');
                     daqAnalStart = find(frameNums.epi == analStart,1,'first');

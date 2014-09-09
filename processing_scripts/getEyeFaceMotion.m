@@ -14,7 +14,7 @@
 %% Specify animal/experiment/data location
 animalName      = 'K51';
 expDateNum      = '20140902_01';
-nRois           = 6;
+nRois           = 5;
 makeNewFaceRois = 0;
 
 % Get the base location for data, see function for details
@@ -56,10 +56,8 @@ if processFaceImages
                 case 3
                     roi(iRoi).label = 'largeSquareAboveNose';
                 case 4
-                    roi(iRoi).label = 'ballRight';
-                case 5
                     roi(iRoi).label = 'wiskerBaseL';
-                case 6
+                case 5
                     roi(iRoi).label = 'wiskerBaseR';
             end
             fprintf('Select ROI %s\n',roi(iRoi).label)
@@ -86,7 +84,7 @@ if processFaceImages
     for iStack = 1:numel(frameInfo)
         clear currStack
         fprintf('Stack: %4.d /  %4.d\n',iStack,numel(frameInfo))
-        currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName),1);
+        currStack = tiffRead(fullfile(faceStackDir,frameInfo(iStack).fileName));
         for iRoi = 1:nRois
             fprintf('ROI: %2.d /  %2.d\n',iRoi,nRois)
             currFaceSubStack{iRoi} = currStack(roi(iRoi).Yinds,roi(iRoi).Xinds,:);

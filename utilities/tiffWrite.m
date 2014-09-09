@@ -15,7 +15,8 @@ end
 
 if ~exist('option', 'var')
     % uint16 default type
-    option.BitsPerSample = 16;
+    option.BitsPerSample = 32;
+    option.Float = false;
     % 'Deflate' as default Compression
     option.Compression = 32946;
     option.Append = false;
@@ -32,6 +33,9 @@ if ~isfield(option,'BitsPerSample')
 end
 if ~isfield(option,'BigTiff')
     option.BigTiff = false;
+end
+if ~isfield(option,'Float')
+    option.Float = false;
 end
 % Add extension:
 if isempty(regexp(fileName, '\.tiff?$', 'ignorecase'))
@@ -79,14 +83,31 @@ end
 % Convert input image to desired bitDepth:
 switch option.BitsPerSample
     case 8
+        format = Tiff.SampleFormat.Int;
         img = uint8(img);
         bitsPerSample = 8;
     case {16,14,12}
+        format = Tiff.SampleFormat.Int;
         img = uint16(img);
         bitsPerSample = 16;
     case 32
-        img = uint32(img);
         bitsPerSample = 32;
+        if option.Float
+            format = Tiff.SampleFormat.IEEEFP;
+            img = single(img);
+        else
+            format = Tiff.SampleFormat.Int;
+            img = single(img);
+        end
+    case 64 
+        bitsPerSample = 64;
+        if option.Float
+            format = Tiff.SampleFormat.IEEEFP;
+            img = double(img);
+        else
+            format = Tiff.SampleFormat.Int;
+            img = double(img);
+        end
     otherwise
         error('Unsupported bit depth.');
 end
@@ -115,6 +136,7 @@ end
 tagStruct.ImageLength = h;
 tagStruct.ImageWidth = w;
 tagStruct.Photometric = Tiff.Photometric.MinIsBlack;
+tagStruct.SampleFormat = format;
 tagStruct.BitsPerSample = bitsPerSample;
 tagStruct.SamplesPerPixel = 1;
 tagStruct.Compression = option.Compression;
